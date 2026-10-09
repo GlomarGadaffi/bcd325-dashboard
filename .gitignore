@@ -30,3 +30,6 @@ notes/
 LINEAGE.md
 *.old
 *.bak
+
+# SSL certificates (generated per-environment)
+*.pem
