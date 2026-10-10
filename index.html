@@ -2,12 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Pre-paint theme: apply a stored light/dark choice before the first paint.
+      // Absent, unreadable or any other value leaves the OS (System) theme in charge.
+      (function () {
+        try {
+          var t = localStorage.getItem('bearsentinel.theme');
+          if (t === 'light' || t === 'dark') {
+            document.documentElement.setAttribute('data-theme', t);
+          }
+        } catch (e) {
+          // Storage can throw in private windows or with blocked site data.
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BearSentinel // EDACS Telemetry Dashboard</title>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
