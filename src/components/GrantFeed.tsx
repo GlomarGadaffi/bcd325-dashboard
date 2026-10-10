@@ -5,7 +5,7 @@ import { Activity } from 'lucide-react';
 import './GrantFeed.css';
 
 export default function GrantFeed() {
-    const { grants } = useSentinelState();
+    const { grants, clock: now } = useSentinelState();
     const feedRef = useRef<HTMLDivElement>(null);
     const [autoScroll, setAutoScroll] = useState(true);
 
@@ -49,7 +49,6 @@ export default function GrantFeed() {
     // To prevent the feed from being rendered backwards compared to what user wants (newest at bottom)
     // Actually, grants array has newest at index 0 (unshifted). We reverse it for rendering so newest is at bottom.
     const reversedGrants = [...grants].reverse();
-    const now = Date.now();
 
     return (
         <div className="edacs-feed-panel">

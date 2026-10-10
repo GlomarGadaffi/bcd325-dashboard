@@ -36,6 +36,7 @@ export class SentinelStore {
     // Analytics
     public tgHits: Map<string, number[]> = new Map(); // SLERS hits for leaderboard
     public rawLog: RawLogEntry[] = [];
+    public clock = Date.now();
     public stats: SessionStats = {
         sessionStart: Date.now(),
         patches: 0,
@@ -252,6 +253,7 @@ export class SentinelStore {
         }
 
         this.pruneTgHits(now);
+        this.clock = now;
 
         // We emit change on every tick to update relative timestamps automatically across the UI
         this.emitChange();
