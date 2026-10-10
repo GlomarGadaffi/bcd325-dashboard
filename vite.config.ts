@@ -8,7 +8,7 @@ const httpsConfig = fs.existsSync('./cert-key.pem') && fs.existsSync('./cert.pem
       key: fs.readFileSync('./cert-key.pem'),
       cert: fs.readFileSync('./cert.pem'),
     }
-  : false
+  : undefined
 
 // https://vitejs.dev/config/
 export default defineConfig({
