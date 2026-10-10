@@ -13,6 +13,7 @@ export class SerialMonitor {
     reader: ReadableStreamDefaultReader<string> | null = null;
     writer: WritableStreamDefaultWriter<string> | null = null;
     connected = false;
+    lastConnectError: unknown = null;
     buffer = "";
     isBusy = false;
     cmdQueue: string[] = [];
@@ -48,6 +49,7 @@ export class SerialMonitor {
     async connect() {
         this.cmdQueue = [];
         this.releaseBusy();
+        this.lastConnectError = null;
         try {
             this.port = await (navigator as Navigator & { serial: { requestPort(): Promise<SerialPortLike> } }).serial.requestPort();
             await this.port.open({ baudRate: 115200 });
@@ -62,6 +64,7 @@ export class SerialMonitor {
             this.startPolling();
         } catch(e) {
             console.error("Connect failed:", e);
+            this.lastConnectError = e;
             this.disconnect();
         }
     }

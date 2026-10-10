@@ -303,27 +303,25 @@ export class SentinelStore {
             rows.push({ id: key, name, agency, h5, h60 });
         }
         
-        return rows.sort((a, b) => b.h5 - a.h5 || b.h60 - a.h60).slice(0, 20);
+        return rows.sort((a, b) => b.h5 - a.h5 || b.h60 - a.h60);
     }
 
     public wipeDB() {
-        if (confirm("Clear all persistent hit history?")) {
-            localStorage.removeItem('sentinel_slers');
-            localStorage.removeItem('sentinel_patches');
-            localStorage.removeItem('sentinel_p25');
-            this.persistentSlers = {};
-            this.persistentPatches = {};
-            this.persistentP25 = {};
-            this.stats.p25Total = 0;
-            this.emitChange();
-        }
+        localStorage.removeItem('sentinel_slers');
+        localStorage.removeItem('sentinel_patches');
+        localStorage.removeItem('sentinel_p25');
+        this.persistentSlers = {};
+        this.persistentPatches = {};
+        this.persistentP25 = {};
+        this.stats.p25Total = 0;
+        this.emitChange();
     }
 
     public exportJSON() {
         const data = {
             stats: this.stats,
             patches: Array.from(this.patches.entries()),
-            leaderboard: this.getLeaderboardRows(),
+            leaderboard: this.getLeaderboardRows().slice(0, 20),
             grants: this.grants,
             persistentSlers: this.persistentSlers,
             persistentPatches: this.persistentPatches,

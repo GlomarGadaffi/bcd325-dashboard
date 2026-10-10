@@ -1,0 +1,258 @@
+/*
+ * Design tokens and base styles. Components reference these custom properties
+ * only; no component declares a literal color.
+ *
+ * Theme mechanism: :root holds the light values. Dark values are declared twice,
+ * once under prefers-color-scheme (unless a data-theme attribute overrides it)
+ * and once for an explicit data-theme="dark". data-theme="light" pins light.
+ * Tints are solid hex values computed as mix(bg-1, accent) at the spec percentages
+ * (10% light, 14% dark). Never alpha text.
+ */
+
+/* ---------- Theme-independent tokens: type, space, shape, motion, layout ---------- */
+:root {
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  /* Type scale: size / line height. Floor 11px. No weight 700. */
+  --fs-caps: 11px;     /* 11/14 600 +0.06em uppercase: headers, chip labels, axis labels */
+  --lh-caps: 14px;
+  --ls-caps: 0.06em;
+  --fs-meta: 12px;     /* 12/16 400: meta, feed timestamps */
+  --lh-meta: 16px;
+  --fs-data: 13px;     /* 13/18 400: desktop data rows, default body */
+  --lh-data: 18px;
+  --fs-body: 14px;     /* 14/20 400: phone body, forms, dialogs */
+  --lh-body: 20px;
+  --fs-title: 16px;    /* 16/22 600: panel titles; 16/22 500 mono: clock */
+  --lh-title: 22px;
+  --fs-counter: 20px;  /* 20/24 500 mono: status counters */
+  --lh-counter: 24px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* Spacing */
+  --s-1: 2px;   /* hairline gaps only */
+  --s-2: 4px;
+  --s-3: 8px;
+  --s-4: 12px;
+  --s-5: 16px;
+  --s-6: 24px;
+  --s-7: 32px;
+
+  /* Radius: 2px tags, chips, kbd; 4px controls, panels, inputs; 0 for rows, strip, sheets */
+  --r-tag: 2px;
+  --r-control: 4px;
+  --r-none: 0;
+
+  /* Motion. Every --dur-* is set to 0ms under reduced motion (see below). */
+  --dur-fast: 120ms;   /* hover, focus, color */
+  --dur-base: 150ms;   /* sheets, collapse */
+  --dur-flash: 800ms;  /* newest feed row only */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Layout: desktop density unless noted */
+  --h-top: 44px;
+  --h-strip: 64px;
+  --h-tabbar: 56px;
+  --gutter: 24px;            /* desktop column gap */
+  --gutter-tablet: 20px;
+  --gutter-phone: 16px;
+  --pad-panel: 12px;         /* desktop panel padding */
+  --pad-panel-phone: 16px;
+  --row-h: 28px;             /* desktop row */
+  --row-h-tablet: 32px;
+  --row-h-phone: 40px;
+  --control-h: 28px;         /* desktop control */
+  --control-h-phone: 44px;
+  --hit-min: 28px;           /* minimum row and hover target on desktop */
+  --hit-touch: 44px;         /* minimum control target on phone and touch */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-flash: 0ms;
+  }
+}
+
+/* ---------- Light values (default) ---------- */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg-0: #f4f6f9;          /* canvas */
+  --bg-1: #ffffff;          /* panels, table bodies */
+  --bg-2: #eceff4;          /* raised, hover, selected row, popovers */
+  --bg-inset: #e6eaf0;      /* wells: feed, raw log, inputs, plot areas */
+  --line-1: #d8dee8;        /* dividers and gridlines only */
+  --line-2: #737e90;        /* control borders; solid bar fill for Units and Members */
+
+  /* Text */
+  --tx-1: #111722;          /* primary */
+  --tx-2: #3a4455;          /* labels, secondary */
+  --tx-3: #5b6679;          /* meta, timestamps, stale ages */
+
+  /* Focus */
+  --focus: #1a57c9;
+
+  /* EDACS identity (never status) */
+  --edacs: #00657d;
+  --edacs-tint: #e6f0f2;    /* mix(bg-1, edacs) at 10% */
+
+  /* P25 identity */
+  --p25: #2a78d6;
+  --p25-tint: #eaf2fb;      /* mix(bg-1, p25) at 10% */
+
+  /* Status. Each is always paired with a glyph and a word. */
+  --live: #137543;
+  --live-tint: #e7f1ec;     /* mix(bg-1, live) at 10%; derived for the LIVE chip fill */
+  --warn: #8a5a00;
+  --warn-tint: #f3eee6;     /* mix(bg-1, warn) at 10%; derived for the WARN chip fill */
+  --error: #b0124c;
+  --error-tint: #f7e7ed;    /* mix(bg-1, error) at 10%; derived for the ERROR chip fill */
+
+  /* Agency histogram segments only. Never text, never a list color. */
+  --ag-fhp: #eb6834;
+  --ag-int: #1baf7a;
+  --ag-loc: #eda100;
+  --ag-fwc: #e87ba4;
+  --ag-fdle: #008300;
+  --ag-tec: #6250d6;
+  --ag-neutral: #898781;    /* UNK, unit calls, MEM, default P25 bucket */
+
+  /* Overlay shadow: sheets, menu, dialogs, tooltips only */
+  --shadow-overlay: 0 12px 28px rgba(17, 23, 34, 0.16);
+}
+
+/* HELD chip: solid ink, not a hue. Resolved against the active theme on :root. */
+:root {
+  --held-fill: var(--tx-1);
+  --held-text: var(--bg-0);
+}
+
+/* ---------- Dark values: OS preference, unless the user chose Light ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg-0: #0b0e13;
+    --bg-1: #121720;
+    --bg-2: #1a2130;
+    --bg-inset: #080b10;
+    --line-1: #222b3a;
+    --line-2: #667389;
+
+    --tx-1: #e7ebf2;
+    --tx-2: #a9b3c3;
+    --tx-3: #8a95a8;
+
+    --focus: #9bd4ff;
+
+    --edacs: #7fd6ee;
+    --edacs-tint: #21323d;  /* mix(bg-1, edacs) at 14% */
+
+    --p25: #3987e5;
+    --p25-tint: #17273c;    /* mix(bg-1, p25) at 14% */
+
+    --live: #5fd08f;
+    --live-tint: #1d3130;   /* mix(bg-1, live) at 14% */
+    --warn: #f2c14e;
+    --warn-tint: #312f26;   /* mix(bg-1, warn) at 14% */
+    --error: #ff8b7d;
+    --error-tint: #33272d;  /* mix(bg-1, error) at 14% */
+
+    --ag-fhp: #d95926;
+    --ag-int: #199e70;
+    --ag-loc: #c98500;
+    --ag-fwc: #d55181;
+    --ag-fdle: #008300;
+    --ag-tec: #9085e9;
+    --ag-neutral: #898781;
+
+    --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* ---------- Dark values: explicit user choice ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-0: #0b0e13;
+  --bg-1: #121720;
+  --bg-2: #1a2130;
+  --bg-inset: #080b10;
+  --line-1: #222b3a;
+  --line-2: #667389;
+
+  --tx-1: #e7ebf2;
+  --tx-2: #a9b3c3;
+  --tx-3: #8a95a8;
+
+  --focus: #9bd4ff;
+
+  --edacs: #7fd6ee;
+  --edacs-tint: #21323d;
+  --p25: #3987e5;
+  --p25-tint: #17273c;
+
+  --live: #5fd08f;
+  --live-tint: #1d3130;
+  --warn: #f2c14e;
+  --warn-tint: #312f26;
+  --error: #ff8b7d;
+  --error-tint: #33272d;
+
+  --ag-fhp: #d95926;
+  --ag-int: #199e70;
+  --ag-loc: #c98500;
+  --ag-fwc: #d55181;
+  --ag-fdle: #008300;
+  --ag-tec: #9085e9;
+  --ag-neutral: #898781;
+
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- Base ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-0);
+  color: var(--tx-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-data);
+  line-height: var(--lh-data);
+  font-weight: var(--fw-regular);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Two-tone focus ring: a 2px bg-0 gap, then a 2px focus ring. Only on :focus-visible. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--bg-0);
+}
