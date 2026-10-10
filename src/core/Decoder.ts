@@ -1,8 +1,12 @@
 import type { EDACSEvent, PatchEvent, SiteEvent, GrantEvent, P25Event } from '../types';
 
 export class ScannerDecoder {
+    static isEDACSLine(line: string): boolean {
+        return /EDW|EDN|SIT-|PAT-|TG-|CH-|LCN-|VC-|\bU-/.test(line);
+    }
+
     static parseEDACS(line: string): EDACSEvent | null {
-        if (!line.startsWith("EDW") && !line.startsWith("EDN") && !line.includes("EDW") && !line.includes("SIT-") && !line.includes("PAT-") && !line.includes("TG-")) {
+        if (!ScannerDecoder.isEDACSLine(line)) {
             return null;
         }
 
@@ -40,7 +44,7 @@ export class ScannerDecoder {
             if (line.includes("CIP") || line.includes("CIV") || line.includes("U-")) grantType = 'ICALL';
             if (line.includes("CPT")) grantType = 'CPT';
 
-            if (tgM || chM || vcM) {
+            if (tgM || chM || vcM || uM) {
                 return {
                     type: 'GRANT',
                     grantType,
