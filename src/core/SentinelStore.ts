@@ -2,6 +2,9 @@ import { Serial } from './SerialMonitor';
 import type { EDACSEvent, PatchEvent, SiteEvent, GrantEvent, P25Event, RawLogEntry, LeaderboardEntry, SessionStats } from '../types';
 import { DB } from './AgencyDB';
 
+// Consecutive GLG packets closer than this are one transmission, not a new one
+const P25_TX_GAP_MS = 2000;
+
 export interface PatchState {
     members: string[];
     lastSeen: number;
@@ -20,7 +23,9 @@ export interface P25CardState {
 export class SentinelStore {
     private version = 0;
     private listeners: Set<() => void> = new Set();
-    
+    private grantSeq = 0;
+    private rawSeq = 0;
+
     // State
     public siteId: string = 'AWAITING C-CH';
     public patches: Map<string, PatchState> = new Map();
@@ -40,6 +45,7 @@ export class SentinelStore {
     
     // Persistent Hit Counters
     public persistentSlers: Record<string, number> = {};
+    public persistentPatches: Record<string, number> = {};
     public persistentP25: Record<string, number> = {};
     
     // Timers
@@ -77,7 +83,9 @@ export class SentinelStore {
         try {
             const s = localStorage.getItem('sentinel_slers');
             const p = localStorage.getItem('sentinel_p25');
+            const pt = localStorage.getItem('sentinel_patches');
             if (s) this.persistentSlers = JSON.parse(s);
+            if (pt) this.persistentPatches = JSON.parse(pt);
             if (p) this.persistentP25 = JSON.parse(p);
             
             // Recalculate p25 total hits from persistence
@@ -91,6 +99,7 @@ export class SentinelStore {
         if (!this.saveTimeout) {
             this.saveTimeout = window.setTimeout(() => {
                 localStorage.setItem('sentinel_slers', JSON.stringify(this.persistentSlers));
+                localStorage.setItem('sentinel_patches', JSON.stringify(this.persistentPatches));
                 localStorage.setItem('sentinel_p25', JSON.stringify(this.persistentP25));
                 this.saveTimeout = null;
             }, 5000);
@@ -106,6 +115,11 @@ export class SentinelStore {
         
         // Persistent
         this.persistentSlers[id] = (this.persistentSlers[id] || 0) + 1;
+        this.scheduleSave();
+    }
+
+    private trackPatchHit(id: string) {
+        this.persistentPatches[id] = (this.persistentPatches[id] || 0) + 1;
         this.scheduleSave();
     }
 
@@ -138,12 +152,10 @@ export class SentinelStore {
         else if (e.type === 'PATCH') {
             const pe = e as PatchEvent;
             const existing = this.patches.get(pe.patchId);
-            
-            this.trackSlersHit(pe.patchId); // Count hit on the patch itself
-            // Wait, legacy sentinel tracked the member ID
-            const memDec = pe.memberId; // In legacy it parsed base 16, now Decoder already passed string.
-            // Oh, Decoder.ts line 24 did `parseInt(memM[1], 16).toString()` for memberId. So it's correct.
-            this.trackSlersHit(memDec);
+
+            this.trackPatchHit(pe.patchId);
+            const memDec = pe.memberId;
+            this.trackSlersHit("M:" + memDec);
 
             if (existing) {
                 if (!existing.members.includes(pe.memberId)) existing.members.push(pe.memberId);
@@ -163,16 +175,16 @@ export class SentinelStore {
         }
         else if (e.type === 'GRANT') {
             const ge = e as GrantEvent;
-            const tgid = ge.talkgroupId || ge.unitId;
-            if (tgid) this.trackSlersHit(tgid);
-            
+            if (ge.talkgroupId) this.trackSlersHit(ge.talkgroupId);
+            else if (ge.unitId) this.trackSlersHit("U:" + ge.unitId);
+
             // Populate Auto-Discovered LCN Map
             if (ge.logicalChannel && ge.voiceChannel) {
                 this.lcnMap.set(ge.logicalChannel, ge.voiceChannel);
             }
-            
-            this.grants.unshift(ge);
-            if (this.grants.length > 200) this.grants.pop();
+
+            ge.id = ++this.grantSeq;
+            this.grants = [ge, ...this.grants.slice(0, 199)];
             this.stats.grants++;
             this.emitChange();
         }
@@ -191,25 +203,26 @@ export class SentinelStore {
         }
 
         const existing = this.p25Cards.get(e.tgid);
+        const newTx = !existing || e.timestamp - existing.lastSeen > P25_TX_GAP_MS;
+        const total = newTx ? this.trackP25Hit(e.tgid) : (this.persistentP25[e.tgid] ?? 0);
         if (existing) {
-            existing.hits++;
+            if (newTx) existing.hits++;
             existing.lastSeen = e.timestamp;
         } else {
-            const hits = this.trackP25Hit(e.tgid);
             this.p25Cards.set(e.tgid, {
                 name: DB[e.tgid]?.n || e.channelName || 'Unknown TG',
                 agency: DB[e.tgid]?.a || 'P25',
                 hits: 1, // session hits
                 lastSeen: e.timestamp,
-                isNew: hits === 1 && !DB[e.tgid]
+                isNew: total === 1 && !DB[e.tgid]
             });
         }
         this.emitChange();
     }
 
     private handleRawLine = (line: string) => {
-        this.rawLog.push({ line, timestamp: Date.now() });
-        if (this.rawLog.length > 200) this.rawLog.shift();
+        const entry = { line, timestamp: Date.now(), id: ++this.rawSeq };
+        this.rawLog = [...this.rawLog.slice(-199), entry];
         this.emitChange();
     }
 
@@ -238,8 +251,21 @@ export class SentinelStore {
             this.lcdData = { tgid: '---', name: 'System Standby', agency: '--' };
         }
 
+        this.pruneTgHits(now);
+
         // We emit change on every tick to update relative timestamps automatically across the UI
         this.emitChange();
+    }
+
+    private pruneTgHits(now: number) {
+        // Timestamps are appended in order, so expired hits form a prefix
+        const cutoff = now - 3600000;
+        for (const [key, timestamps] of this.tgHits.entries()) {
+            const keep = timestamps.findIndex(t => t > cutoff);
+            const drop = keep === -1 ? timestamps.length : keep;
+            if (drop > 0) timestamps.splice(0, drop);
+            if (timestamps.length === 0) this.tgHits.delete(key);
+        }
     }
 
     public toggleP25Hold(tgid: string) {
@@ -263,20 +289,16 @@ export class SentinelStore {
     public getLeaderboardRows = (): LeaderboardEntry[] => {
         const now = Date.now();
         const rows: LeaderboardEntry[] = [];
-        
-        for (const [tgid, timestamps] of this.tgHits.entries()) {
-            // Prune > 60m
-            const validIdx = timestamps.findIndex(t => now - t < 3600000);
-            if (validIdx > 0) {
-                timestamps.splice(0, validIdx);
-            }
+        this.pruneTgHits(now);
 
+        for (const [key, timestamps] of this.tgHits.entries()) {
             const h60 = timestamps.length;
-            if (h60 > 0) {
-                const h5 = timestamps.filter(t => now - t < 300000).length;
-                const info = DB[tgid] || { a: 'UNK', n: 'Unknown ID' };
-                rows.push({ id: tgid, name: info.n, agency: info.a, h5, h60 });
-            }
+            const h5 = timestamps.filter(t => now - t < 300000).length;
+            let name: string, agency: string;
+            if (key.startsWith('U:')) { name = 'Unit ' + key.slice(2); agency = 'UNIT'; }
+            else if (key.startsWith('M:')) { name = 'Member ' + key.slice(2); agency = 'MEM'; }
+            else { const info = DB[key] || { a: 'UNK', n: 'Unknown ID' }; name = info.n; agency = info.a; }
+            rows.push({ id: key, name, agency, h5, h60 });
         }
         
         return rows.sort((a, b) => b.h5 - a.h5 || b.h60 - a.h60).slice(0, 20);
@@ -285,8 +307,10 @@ export class SentinelStore {
     public wipeDB() {
         if (confirm("Clear all persistent hit history?")) {
             localStorage.removeItem('sentinel_slers');
+            localStorage.removeItem('sentinel_patches');
             localStorage.removeItem('sentinel_p25');
             this.persistentSlers = {};
+            this.persistentPatches = {};
             this.persistentP25 = {};
             this.stats.p25Total = 0;
             this.emitChange();
@@ -300,6 +324,7 @@ export class SentinelStore {
             leaderboard: this.getLeaderboardRows(),
             grants: this.grants,
             persistentSlers: this.persistentSlers,
+            persistentPatches: this.persistentPatches,
             persistentP25: this.persistentP25
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -310,7 +335,9 @@ export class SentinelStore {
         const rows = ["timestamp,tgid,name,agency,grantType,lcn,vc"];
         for (const g of this.grants) {
             const tgid = g.talkgroupId || g.unitId || 'UNK';
-            const info = DB[tgid] || { n: 'Unknown', a: 'UNK' };
+            const info = g.talkgroupId
+                ? (DB[g.talkgroupId] || { n: 'Unknown', a: 'UNK' })
+                : g.unitId ? { n: `Unit ${g.unitId}`, a: 'UNIT' } : { n: 'Unknown', a: 'UNK' };
             rows.push(`${new Date(g.timestamp).toISOString()},${tgid},"${info.n}",${info.a},${g.grantType},${g.logicalChannel || ''},${g.voiceChannel || ''}`);
         }
         const blob = new Blob([rows.join('\n')], { type: 'text/csv' });

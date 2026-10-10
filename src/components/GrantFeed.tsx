@@ -24,7 +24,7 @@ export default function GrantFeed() {
 
     useEffect(() => {
         if (autoScroll && feedRef.current) {
-            feedRef.current.scrollTop = feedRef.current.scrollHeight;
+            feedRef.current.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'instant' });
         }
     }, [grants, autoScroll]);
 
@@ -59,14 +59,16 @@ export default function GrantFeed() {
             </div>
             <div className="feed-list" ref={feedRef}>
                 {grants.length === 0 && <div className="empty-state">Awaiting Voice Channel Grants...</div>}
-                {reversedGrants.map((g, i) => {
+                {reversedGrants.map(g => {
                     const tgId = g.talkgroupId || g.unitId || 'UNK';
-                    const info = DB[tgId] || { n: 'Unknown Target', a: 'UNK' };
+                    const info = g.talkgroupId
+                        ? (DB[g.talkgroupId] || { n: 'Unknown Target', a: 'UNK' })
+                        : g.unitId ? { n: `Unit ${g.unitId}`, a: 'UNIT' } : { n: 'Unknown Target', a: 'UNK' };
                     const diff = now - g.timestamp;
                     const timeStr = new Date(g.timestamp).toLocaleTimeString([], { hour12: false });
-                    
+
                     return (
-                        <div key={`${g.timestamp}-${i}`} className={`feed-item card-enter ${agClass(info.a)} ${getOpacityClass(diff)}`}>
+                        <div key={g.id} className={`feed-item card-enter ${agClass(info.a)} ${getOpacityClass(diff)}`}>
                             <div className="feed-item-header">
                                 <div className="feed-item-title-group">
                                     <span className={`grant-badge grant-${g.grantType.toLowerCase()}`}>{g.grantType}</span>
