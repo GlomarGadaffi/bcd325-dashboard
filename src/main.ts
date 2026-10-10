@@ -7,13 +7,14 @@ import './ui/styles/tokens.css'
 import { mount } from 'svelte'
 import App from './App.svelte'
 import { Serial } from './core/SerialMonitor'
-import { coreStore, setSnapshot } from './ui/state/adapter.svelte'
+import { coreStore, resumeLive, setSnapshot } from './ui/state/adapter.svelte'
 
 /** Dev-only hooks for the browser test harness. Production builds do not include this block. */
 declare global {
   interface Window {
     bearsentinelDev?: {
       setSnapshot: typeof setSnapshot
+      resumeLive: typeof resumeLive
       coreStore: typeof coreStore
       ingest: (chunk: string) => void
     }
@@ -30,6 +31,7 @@ mount(App, { target })
 if (import.meta.env.DEV) {
   window.bearsentinelDev = {
     setSnapshot,
+    resumeLive,
     coreStore,
     ingest: (chunk: string) => Serial.ingest(chunk),
   }

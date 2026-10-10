@@ -216,7 +216,7 @@
   }
 
   .list {
-    /* Two-line 40 px rows by default. Wide enough feeds switch to one line below. */
+    /* Two-line 40 px rows by default. Feeds at least 540 px wide switch to one line below; narrower ones keep the full name on its own line. */
     --row-h: 40px;
     position: relative;
     flex: 1 1 auto;
@@ -252,7 +252,7 @@
       'name name name name name chan';
   }
 
-  @container feed (min-width: 390px) {
+  @container feed (min-width: 540px) {
     .list {
       --row-h: 28px;
     }
@@ -266,7 +266,7 @@
 
   /* Tablet rows are 32 px, from the spacing spec. */
   @media (min-width: 640px) and (max-width: 1279.98px) {
-    @container feed (min-width: 390px) {
+    @container feed (min-width: 540px) {
       .list {
         --row-h: 32px;
       }

@@ -193,6 +193,20 @@ describe('adapter snapshot', () => {
     expect(adapter.getSnapshot()).toBe(injected)
   })
 
+  it('a pinned snapshot survives the rebuild until resumeLive', async () => {
+    const { adapter, store } = await loadFresh()
+    const injected = { ...adapter.getSnapshot(), siteId: 'PINNED' }
+    adapter.setSnapshot(injected)
+    store.siteId = 'LIVE01'
+    ;(store as unknown as { emitChange(): void }).emitChange()
+    vi.advanceTimersByTime(5000)
+    expect(adapter.getSnapshot().siteId).toBe('PINNED')
+
+    adapter.resumeLive()
+    vi.advanceTimersByTime(1000)
+    expect(adapter.getSnapshot().siteId).toBe('LIVE01')
+  })
+
   it('connected follows Serial status notifications', async () => {
     const { adapter, Serial } = await loadFresh()
     expect(adapter.getSnapshot().connected).toBe(false)

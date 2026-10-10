@@ -58,6 +58,7 @@ export const coreStore: SentinelStore = store
 
 let connected = Serial.connected
 let dirty = false
+let pinned = false
 
 function markDirty(): void {
   dirty = true
@@ -104,7 +105,7 @@ Serial.onStatusChange((next) => {
 // Store emits and status changes only mark the snapshot dirty. The snapshot
 // itself is rebuilt at most once per second, however many emits arrived.
 setInterval(() => {
-  if (!dirty) return
+  if (pinned || !dirty) return
   dirty = false
   snapshot = buildSnapshot()
 }, 1000)
@@ -114,9 +115,19 @@ export function getSnapshot(): SentinelSnapshot {
   return snapshot
 }
 
-/** Replaces the snapshot. Tests use this to inject state. */
+/**
+ * Replaces the snapshot and pins it, so the once-a-second rebuild from the core
+ * store does not overwrite it. Tests and the dev hook use this to inject state.
+ */
 export function setSnapshot(next: SentinelSnapshot): void {
   snapshot = next
+  pinned = true
+}
+
+/** Unpins an injected snapshot; the next store emit rebuilds from live state. */
+export function resumeLive(): void {
+  pinned = false
+  dirty = true
 }
 
 /**
