@@ -119,8 +119,15 @@ export function setSnapshot(next: SentinelSnapshot): void {
   snapshot = next
 }
 
-export function connect(): Promise<void> {
-  return Serial.connect()
+/**
+ * Resolves with null on success, 'NotFoundError' when the operator cancels the
+ * picker, or the error name for a real failure to open the port.
+ */
+export async function connect(): Promise<string | null> {
+  await Serial.connect()
+  const err = Serial.lastConnectError
+  if (err === null) return null
+  return err instanceof DOMException ? err.name : 'Error'
 }
 
 export function disconnect(): Promise<void> {
