@@ -22,6 +22,7 @@ export interface GrantEvent extends EDACSEvent {
   voiceChannel?: string;
   unitId?: string;
   grantType: 'TG' | 'ICALL' | 'CPT' | 'UNKNOWN';
+  id: number;
 }
 
 export interface P25Event {
@@ -36,6 +37,7 @@ export interface P25Event {
 export interface RawLogEntry {
   line: string;
   timestamp: number;
+  id: number;
 }
 
 export interface LeaderboardEntry {

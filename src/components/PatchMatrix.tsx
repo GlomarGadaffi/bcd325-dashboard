@@ -1,10 +1,10 @@
 import { useSentinelState } from '../core/useSentinel';
-import { DB, agClass } from '../core/AgencyDB';
+import { agClass } from '../core/AgencyDB';
 import { Radio } from 'lucide-react';
 import './PatchMatrix.css';
 
 export default function PatchMatrix() {
-    const { patches, siteId, persistentSlers } = useSentinelState();
+    const { patches, siteId, persistentPatches } = useSentinelState();
     const now = Date.now();
 
     const formatAge = (diffMs: number) => {
@@ -34,7 +34,7 @@ export default function PatchMatrix() {
                             </div>
                             <div className="patch-members">
                                 {p.members.map(mid => {
-                                    const info = DB[mid] || { n: 'Unknown ID', a: 'UNK' };
+                                    const info = { n: 'Member', a: 'MEM' };
                                     return (
                                         <div key={mid} className={`member-row ${agClass(info.a)}`}>
                                             <span className="member-id">{mid}</span>
@@ -44,7 +44,7 @@ export default function PatchMatrix() {
                                 })}
                             </div>
                             <div className="patch-footer">
-                                <span>ALL-TIME: <b>{persistentSlers[pid] || 0}</b></span>
+                                <span>ALL-TIME: <b>{persistentPatches[pid] || 0}</b></span>
                                 <span className="patch-age">{formatAge(diff)}</span>
                             </div>
                         </div>

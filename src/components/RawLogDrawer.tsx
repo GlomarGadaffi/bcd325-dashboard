@@ -34,8 +34,8 @@ export default function RawLogDrawer({ open, onClose }: RawLogDrawerProps) {
                 <button onClick={onClose} title="Close drawer"><X size={12} /></button>
             </div>
             <div className="raw-log-content" ref={scrollRef}>
-                {rawLog.map((log, i) => (
-                    <div key={`${log.timestamp}-${i}`} className="raw-log-line">
+                {rawLog.map(log => (
+                    <div key={log.id} className="raw-log-line">
                         <span className="log-time">{new Date(log.timestamp).toISOString()}</span>
                         <span className={`log-text ${getLineClass(log.line)}`}>{log.line}</span>
                     </div>

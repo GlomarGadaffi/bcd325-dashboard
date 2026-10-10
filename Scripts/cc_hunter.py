@@ -17,7 +17,7 @@ Component usage:
     hunter = ControlChannelHunter(
         transport=ScannerTransport("/dev/ttyUSB0"),
         config=HunterConfig(
-            sweep_ranges=[FrequencyRange(85100000, 86900000, 1250, "800 MHz")],
+            sweep_ranges=[FrequencyRange(8510000, 8690000, 125, "800 MHz")],
         ),
         on_state_change=my_state_handler,
         on_tgid_seen=my_tgid_handler,
@@ -74,15 +74,25 @@ class FrequencyRange:
     step:  int
     label: str = ""
 
+    def __post_init__(self):
+        # Scanner lockout range per protocol.txt: 250000-9600000 (25-960 MHz).
+        if self.step <= 0:
+            raise ValueError(f"step must be positive, got {self.step}")
+        if self.low > self.high:
+            raise ValueError(f"low {self.low} is above high {self.high}")
+        for edge in (self.low, self.high):
+            if not 250000 <= edge <= 9600000:
+                raise ValueError(f"{edge} is outside the 25-960 MHz scanner range")
+
 
 @dataclass
 class HunterConfig:
     sweep_ranges: list[FrequencyRange] = field(default_factory=lambda: [
         # Common P25 public safety allocations — adjust for your market.
         # Florida 800 MHz interop band is a good starting point.
-        FrequencyRange(85100000, 86900000, 1250, "800 MHz SMR"),
-        FrequencyRange(76400000, 77600000, 1250, "700 MHz"),
-        FrequencyRange(80600000, 82400000, 1250, "806-824 MHz"),
+        FrequencyRange(8510000, 8690000, 125, "800 MHz SMR"),
+        FrequencyRange(7640000, 7760000, 125, "700 MHz"),
+        FrequencyRange(8060000, 8240000, 125, "806-824 MHz"),
     ])
 
     # Sweep behavior
@@ -128,7 +138,7 @@ class ScannerTransport:
         with self._lock:
             self._serial.reset_input_buffer()
             self._serial.write((cmd + "\r").encode("ascii"))
-            raw = self._serial.readline()
+            raw = self._serial.read_until(b"\r")  # protocol frames responses with CR only
             response = raw.decode("ascii", errors="replace").strip()
             log.debug(">> %s  << %s", cmd, response)
             return response
@@ -262,11 +272,10 @@ class ControlChannelCandidate:
             + min(self.mean_rssi / 1023.0, 1.0) * 0.15
         )
 
-    @property
-    def qualifies_as_control_channel(self) -> bool:
+    def qualifies_as_control_channel(self, duty_threshold: float, nac_threshold: float) -> bool:
         return (
-            self.duty_cycle      >= 0.85
-            and self.nac_consistency >= 0.70
+            self.duty_cycle          >= duty_threshold
+            and self.nac_consistency >= nac_threshold
         )
 
     def summary(self) -> str:
@@ -383,7 +392,7 @@ class ControlChannelHunter:
         self._locked_at:        Optional[float] = None
         self._current_lock_id:  Optional[int] = None
 
-        self._db = _open_database(config.db_path)
+        self._db: Optional[sqlite3.Connection] = None
 
     # ------------------------------------------------------------------
     # Public interface
@@ -394,6 +403,7 @@ class ControlChannelHunter:
         if self._thread and self._thread.is_alive():
             log.warning("start() called on already-running hunter")
             return
+        self._db = _open_database(self._config.db_path)
         self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run,
@@ -407,7 +417,6 @@ class ControlChannelHunter:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
-        self._db.close()
 
     def join(self) -> None:
         """Block until stop() is called or thread exits naturally."""
@@ -431,13 +440,34 @@ class ControlChannelHunter:
     # ------------------------------------------------------------------
 
     def _run(self) -> None:
-        self._transition(State.SWEEPING, {"reason": "startup"})
-        while not self._stop_event.is_set():
-            if self._state == State.SWEEPING:
-                self._phase_sweep_and_qualify()
-            elif self._state == State.LOCKED:
-                self._phase_monitor()
-        self._transition(State.STOPPED, {})
+        try:
+            self._transition(State.SWEEPING, {"reason": "startup"})
+            while not self._stop_event.is_set():
+                try:
+                    if self._state == State.SWEEPING:
+                        self._phase_sweep_and_qualify()
+                    elif self._state == State.LOCKED:
+                        self._phase_monitor()
+                except Exception:
+                    log.exception("Error in %s phase; backing off", self._state)
+                    if self._state == State.LOCKED:
+                        self._declare_loss(
+                            self._locked_frequency,
+                            self._locked_nac,
+                            time.time() - (self._locked_at or time.time()),
+                            "transport/db error",
+                        )
+                    self._stop_event.wait(timeout=5.0)
+        finally:
+            if self._db is not None:
+                try:
+                    self._db_close_lock()
+                except Exception:
+                    log.exception("failed to close open CC lock on shutdown")
+                self._current_lock_id = None
+                self._db.close()
+                self._db = None
+            self._transition(State.STOPPED, {})
 
     def _transition(self, new_state: str, context: dict) -> None:
         old = self._state
@@ -501,7 +531,10 @@ class ControlChannelHunter:
                 return
             candidate = self._qualify_candidate(frq_str)
             log.info("  %s", candidate.summary())
-            if candidate.qualifies_as_control_channel:
+            if candidate.qualifies_as_control_channel(
+                self._config.duty_cycle_threshold,
+                self._config.nac_consistency_threshold,
+            ):
                 qualified.append(candidate)
 
         if not qualified:
@@ -648,20 +681,32 @@ class ControlChannelHunter:
                     silence,
                     _fmt_mhz(frq_str),
                 )
-                self._db_close_lock()
-                if self._on_cc_lost:
-                    try:
-                        self._on_cc_lost(frq_str, nac, locked_duration)
-                    except Exception:
-                        log.exception("on_cc_lost callback raised")
-                self._locked_frequency = None
-                self._locked_nac       = None
-                self._locked_at        = None
-                self._current_lock_id  = None
-                self._transition(State.SWEEPING, {"reason": "control channel lost"})
+                self._declare_loss(frq_str, nac, locked_duration, "control channel lost")
                 return
 
             time.sleep(max(0.0, interval - (time.monotonic() - tick)))
+
+    def _declare_loss(
+        self,
+        frq_str:         Optional[str],
+        nac:             Optional[str],
+        locked_duration: float,
+        reason:          str,
+    ) -> None:
+        try:
+            self._db_close_lock()
+        except Exception:
+            log.exception("failed to record CC loss in database")
+        if self._on_cc_lost:
+            try:
+                self._on_cc_lost(frq_str, nac, locked_duration)
+            except Exception:
+                log.exception("on_cc_lost callback raised")
+        self._locked_frequency = None
+        self._locked_nac       = None
+        self._locked_at        = None
+        self._current_lock_id  = None
+        self._transition(State.SWEEPING, {"reason": reason})
 
     # ------------------------------------------------------------------
     # TGID event handling

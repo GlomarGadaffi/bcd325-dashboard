@@ -12,6 +12,8 @@ export class SerialMonitor {
     isBusy = false;
     cmdQueue: string[] = [];
     pollInt: number | null = null;
+    private inFlight: string | null = null;
+    private busyTimer: number | null = null;
 
     private edacsListeners: AnyEventCallback[] = [];
     private p25Listeners: AnyEventCallback[] = [];
@@ -39,6 +41,8 @@ export class SerialMonitor {
     }
 
     async connect() {
+        this.cmdQueue = [];
+        this.releaseBusy();
         try {
             this.port = await (navigator as any).serial.requestPort();
             await this.port.open({ baudRate: 115200 });
@@ -60,6 +64,8 @@ export class SerialMonitor {
     async disconnect() {
         this.connected = false;
         this.stopPolling();
+        this.cmdQueue = [];
+        this.releaseBusy();
         this.notifyStatus();
 
         try {
@@ -106,23 +112,32 @@ export class SerialMonitor {
     }
 
     route(line: string) {
-        if (line.includes("EDW") || line.includes("EDN") || line.includes("SIT-") || line.includes("PAT-") || line.match(/TG-|CH-|LCN-|VC-/)) {
-            const edacsEvent = ScannerDecoder.parseEDACS(line);
-            if (edacsEvent) {
-                this.edacsListeners.forEach(cb => cb(edacsEvent));
-            }
-        } else if (line.startsWith("GLG")) {
+        if (line.startsWith("GLG")) {
             const p25Event = ScannerDecoder.parseP25(line);
             if (p25Event) {
                 this.p25Listeners.forEach(cb => cb(p25Event));
             }
-            this.isBusy = false;
-            this.processQueue();
+        } else if (ScannerDecoder.isEDACSLine(line)) {
+            const edacsEvent = ScannerDecoder.parseEDACS(line);
+            if (edacsEvent) {
+                this.edacsListeners.forEach(cb => cb(edacsEvent));
+            }
         }
+        if (this.isBusy && this.isReplyTo(line)) {
+            this.releaseBusy();
+        }
+    }
+
+    private isReplyTo(line: string): boolean {
+        if (/^(ERR|NG|FER|ORER)/.test(line)) return true;
+        if (this.inFlight === "GLG") return line.startsWith("GLG");
+        if (this.inFlight?.startsWith("KEY,")) return line.startsWith("KEY,") || line === "OK";
+        return false;
     }
 
     queueCmd(cmd: string) {
         if (!this.connected) return;
+        if (cmd === "GLG" && this.cmdQueue[this.cmdQueue.length - 1] === "GLG") return;
         this.cmdQueue.push(cmd);
         this.processQueue();
     }
@@ -132,12 +147,22 @@ export class SerialMonitor {
         this.isBusy = true;
         const cmd = this.cmdQueue.shift();
         if (cmd) {
+            this.inFlight = cmd;
+            this.busyTimer = window.setTimeout(() => this.releaseBusy(), 1000);
             try {
                 await this.writer.write(cmd + "\r");
             } catch(e) {
-                this.isBusy = false;
+                this.releaseBusy();
             }
         }
+    }
+
+    private releaseBusy() {
+        if (this.busyTimer !== null) window.clearTimeout(this.busyTimer);
+        this.busyTimer = null;
+        this.isBusy = false;
+        this.inFlight = null;
+        this.processQueue();
     }
 
     startPolling() {
