@@ -4,9 +4,13 @@
   import P25Table from '../p25/P25Table.svelte'
   import { P25_AGENCY_KEYS, allAgenciesOn, type P25AgencyKey } from '../p25/p25Model'
 
-  // Composition root for the P25 column. It owns the agency chips and passes Hold requests
-  // up. The live table and the all-time bars read the snapshot themselves.
-  let { onHold }: { onHold: (tgid: string) => void } = $props()
+  // Composition root for the P25 column. It owns the agency chips and passes Hold and
+  // Release requests up to the shell. The live table and the all-time bars read the
+  // snapshot themselves.
+  let {
+    onHold,
+    onRelease,
+  }: { onHold: (tgid: string) => void; onRelease: (tgid: string) => void } = $props()
 
   let agencyOn = $state<Record<P25AgencyKey, boolean>>(allAgenciesOn())
 
@@ -26,7 +30,7 @@
     {/each}
   </div>
 
-  <P25Table {onHold} {agencyOn} />
+  <P25Table {onHold} {onRelease} {agencyOn} />
   <P25AllTime />
 </section>
 

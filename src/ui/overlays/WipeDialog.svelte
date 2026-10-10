@@ -38,23 +38,12 @@
     })
   })
 
-  // The store's wipeDB asks window.confirm itself. This dialog is that
-  // confirmation, so the browser prompt is held off for the one synchronous call.
-  function wipeWithoutNativeConfirm(): void {
-    const native = window.confirm
-    window.confirm = () => true
-    try {
-      wipeDB()
-    } finally {
-      window.confirm = native
-    }
-  }
-
+  // The core wipe no longer asks for confirmation. This dialog is the confirmation.
   function confirmWipe(): void {
     if (!armed) return
     error = null
     try {
-      wipeWithoutNativeConfirm()
+      wipeDB()
       onClose()
     } catch (err) {
       error = errorMessage(err)

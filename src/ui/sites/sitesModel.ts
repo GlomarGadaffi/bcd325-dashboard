@@ -264,6 +264,9 @@ export function formatAge(ageMs: number): string {
 
 // ---------- Tabs and empty states ----------
 
+/** Rows a leaderboard panel shows, for its own kind only. The store keeps every ID it has seen. */
+export const LEADERBOARD_ROWS = 20
+
 export const SITES_TABS = ['talkgroups', 'units', 'members', 'channels'] as const
 export type SitesTab = (typeof SITES_TABS)[number]
 

@@ -1,22 +1,25 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, type Snippet } from 'svelte'
   import { exportCSV, exportJSON } from '../state/adapter.svelte'
   import StateChip from '../primitives/StateChip.svelte'
   import { captureFocus, returnFocus } from './focusReturn'
   import { errorMessage } from './overlayModel'
 
   // Top-right popover. Sheets and dialogs opened from here take focus over;
-  // closing them returns focus to the menu trigger.
+  // closing them returns focus to the menu trigger. On phone the shell passes extra
+  // content (counters and the theme toggle) above the actions.
   let {
     onRawLog,
     onChannels,
     onWipe,
     onClose,
+    extra,
   }: {
     onRawLog: () => void
     onChannels: () => void
     onWipe: () => void
     onClose: () => void
+    extra?: Snippet
   } = $props()
 
   let menuEl: HTMLElement | undefined = $state()
@@ -25,7 +28,7 @@
 
   onMount(() => {
     captureFocus()
-    menuEl?.querySelector<HTMLButtonElement>('button')?.focus()
+    menuEl?.querySelector<HTMLButtonElement>('.item')?.focus()
     return () => {
       if (!handedOff) returnFocus()
     }
@@ -47,6 +50,9 @@
   }
 
   function openChannels(): void {
+    // Channels either opens a sheet or moves focus to the Sites tab, so the menu
+    // does not return focus to its trigger on the way out.
+    handedOff = true
     onChannels()
     onClose()
   }
@@ -67,7 +73,9 @@
 
 <svelte:window onkeydown={onWindowKey} />
 
-<div class="menu" role="group" aria-label="Menu" bind:this={menuEl}>
+<div class="menu" class:is-wide={extra !== undefined} role="group" aria-label="Menu" bind:this={menuEl}>
+  {#if extra}{@render extra()}{/if}
+
   <div class="group">
     <button type="button" class="item" onclick={() => runExport(exportJSON)}>Export JSON</button>
     <button type="button" class="item" onclick={() => runExport(exportCSV)}>Export CSV</button>
@@ -97,11 +105,18 @@
     right: var(--s-3);
     z-index: 30;
     width: min(240px, calc(100vw - 2 * var(--s-5)));
+    max-height: calc(100dvh - var(--h-top) - var(--s-5));
+    overflow-y: auto;
     padding: var(--s-2) 0;
     border: 1px solid var(--line-1);
     border-radius: var(--r-control);
     background: var(--bg-2);
     box-shadow: var(--shadow-overlay);
+  }
+
+  /* Phone: counters and the theme toggle make the menu wider. */
+  .menu.is-wide {
+    width: min(320px, calc(100vw - 2 * var(--s-3)));
   }
 
   .group {

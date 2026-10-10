@@ -6,7 +6,8 @@
 
   // 64 px strip: scanner (widest, leads with the hold line), last call, counters.
   // Below 640 px it becomes two lines, scanner state and last call, and the
-  // counters leave the strip (the menu carries them in the phone layout).
+  // counters leave the strip (the phone menu carries them). The phone strip grows to
+  // fit its two lines; the shell gives it an auto grid row.
   let { scanner, newCount = 0 }: { scanner?: Snippet; newCount?: number } = $props()
 
   function matchesCompact(): boolean {
@@ -95,18 +96,22 @@
     }
   }
 
-  /* Phone: two lines, scanner over last call, both inside the 64 px row. */
+  /* Phone: two lines, scanner over last call. The scanner line can wrap, so the strip
+     is at least 64 px and grows with its content. */
   @media (max-width: 639px) {
     .strip {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-      position: sticky;
-      top: var(--h-top);
-      z-index: 2;
+      grid-template-rows: auto auto;
+      height: auto;
+      min-height: var(--h-strip);
     }
 
     .zone {
-      padding: 0 var(--pad-panel-phone);
+      padding: var(--s-2) var(--pad-panel-phone);
+    }
+
+    .zone-scanner {
+      overflow: visible;
     }
 
     /* Stacked lines: the divider sits above the last-call line, not beside it. */

@@ -33,14 +33,14 @@
             <li class="bar-item">
               <Tooltip id="p25-all-time-{row.tgid}" text={allTimeTooltip(row)}>
                 {#snippet children(id)}
-                  <div class="bar-row" tabindex="0" aria-describedby={id}>
+                  <button type="button" class="bar-row" aria-describedby={id}>
                     <span class="tg">{row.tgid}</span>
                     <span class="name">{row.name}</span>
                     <span class="track" style:--ratio={top > 0 ? row.count / top : 0}>
                       <span class="fill"></span>
                       <span class="value">{row.count}</span>
                     </span>
-                  </div>
+                  </button>
                 {/snippet}
               </Tooltip>
             </li>
@@ -112,14 +112,23 @@
     width: 100%;
   }
 
+  /* A real button, so keyboard focus reaches the row and opens the same tooltip as hover. */
   .bar-row {
     display: grid;
     grid-template-columns: 48px minmax(0, 40%) minmax(0, 1fr);
     align-items: center;
     column-gap: var(--s-3);
+    width: 100%;
     min-height: var(--hit-min);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
     font-size: var(--fs-meta);
     line-height: var(--lh-meta);
+    text-align: left;
+    cursor: default;
   }
 
   .tg {

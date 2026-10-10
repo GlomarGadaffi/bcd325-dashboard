@@ -13,13 +13,13 @@
   } from '../sites/sitesModel'
 
   // Composition root for the EDACS sites column. Patches sit on top, capped at 40% of the
-  // column; the tabbed panels fill the rest. Compact and tabs are set by the shell.
+  // column; the tabbed panels fill the rest. Compact and tabs are set by the shell, and the
+  // shell can select a tab (the menu's Channels item does, on desktop).
   let {
     compact = false,
     tabs = SITES_TABS,
-  }: { compact?: boolean; tabs?: readonly SitesTab[] } = $props()
-
-  let tab = $state<SitesTab>('talkgroups')
+    tab = $bindable('talkgroups'),
+  }: { compact?: boolean; tabs?: readonly SitesTab[]; tab?: SitesTab } = $props()
 
   const snap = $derived(getSnapshot())
   const groups = $derived(splitLeaderboard(snap.leaderboard))

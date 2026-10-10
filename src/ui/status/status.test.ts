@@ -71,7 +71,6 @@ describe('StatusTiles', () => {
       'P25 transmissions, all time',
       'NEW',
       'Session',
-      'Site',
     ])
   })
 
@@ -90,13 +89,14 @@ describe('StatusTiles', () => {
     expect(values[2]).toBe('96')
     expect(values[3]).toBe('2')
     expect(values[4]).toBe('3 m 5 s')
-    expect(values[5]).toBe('01F4')
+    expect(values).toHaveLength(5)
   })
 
-  it('shows the placeholder while no site is known', () => {
-    setSnapshot(snapshot({ siteId: 'AWAITING C-CH' }))
+  it('has no Site tile; the top bar carries the site', () => {
+    setSnapshot(snapshot({ siteId: '01F4' }))
     render(StatusTiles)
-    expect(host.querySelector('.site')?.textContent).toBe('AWAITING C-CH')
+    expect(labels()).not.toContain('Site')
+    expect(host.querySelector('.site')).toBeNull()
   })
 
   it('withholds the delta for a young session', () => {

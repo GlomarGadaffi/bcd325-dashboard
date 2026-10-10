@@ -3,7 +3,7 @@
   import AgencyTag from '../primitives/AgencyTag.svelte'
   import StateChip from '../primitives/StateChip.svelte'
   import { formatAge } from '../scanner/format'
-  import { getSnapshot, toggleP25Hold, type P25Row } from '../state/adapter.svelte'
+  import { getSnapshot, type P25Row } from '../state/adapter.svelte'
   import { clock } from '../state/clock.svelte'
   import {
     HOLD_ACTIVE_NOTE,
@@ -20,12 +20,17 @@
     type P25AgencyKey,
   } from './p25Model'
 
-  // Live P25 talkgroups. Hold goes to the parent, which routes it through the confirm
-  // sheet on touch and phone. Release goes straight to the store.
+  // Live P25 talkgroups. Hold and Release both go to the parent, which sends them through
+  // the hold controller. This table never writes to the store itself.
   let {
     onHold,
+    onRelease,
     agencyOn,
-  }: { onHold: (tgid: string) => void; agencyOn: Record<P25AgencyKey, boolean> } = $props()
+  }: {
+    onHold: (tgid: string) => void
+    onRelease: (tgid: string) => void
+    agencyOn: Record<P25AgencyKey, boolean>
+  } = $props()
 
   const snap = $derived(getSnapshot())
   const heldTg = $derived(snap.p25HoldingTG)
@@ -78,7 +83,7 @@
   )
 
   function onRowHold(row: P25Row): void {
-    if (heldTg === row.tgid) toggleP25Hold(row.tgid)
+    if (heldTg === row.tgid) onRelease(row.tgid)
     else onHold(row.tgid)
   }
 

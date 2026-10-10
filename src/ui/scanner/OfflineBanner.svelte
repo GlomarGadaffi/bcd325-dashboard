@@ -14,8 +14,14 @@
   import { formatClock } from './format'
 
   // Visible notice for connection problems, plus an always-present assertive region so a
-  // drop, a reconnect or a port error is announced when its text appears.
-  let { hasWebSerial, portError = false }: { hasWebSerial: boolean; portError?: boolean } = $props()
+  // drop, a reconnect or a port error is announced when its text appears. The shell decides
+  // whether the notice is visible (disconnected with data seen, or no Web Serial, or a port
+  // error); the announcement region stays mounted either way.
+  let {
+    hasWebSerial,
+    portError = false,
+    visible = true,
+  }: { hasWebSerial: boolean; portError?: boolean; visible?: boolean } = $props()
 
   const snapshot = $derived(getSnapshot())
 
@@ -68,7 +74,7 @@
   })
 </script>
 
-{#if notice}
+{#if notice && visible}
   <div class="banner">
     <StatusChip glyph={notice.glyph} tone={notice.tone} label={notice.label} />
     <p class="text">{notice.text}</p>
@@ -78,13 +84,8 @@
 <p class="sr-only" aria-live="assertive">{alertText}</p>
 
 <style>
-  /* Fixed under the top bar so the grid does not reflow when a notice appears. */
+  /* In flow between the top bar and the strip. The shell gives it a grid row. */
   .banner {
-    position: fixed;
-    top: var(--h-top);
-    left: 0;
-    right: 0;
-    z-index: 20;
     display: flex;
     align-items: center;
     gap: var(--s-3);
@@ -116,7 +117,6 @@
 
   @media (max-width: 639px) {
     .banner {
-      top: var(--h-top);
       align-items: flex-start;
       padding: var(--s-3) var(--s-5);
     }

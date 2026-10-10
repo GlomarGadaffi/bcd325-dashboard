@@ -10,76 +10,100 @@
 </script>
 
 <script lang="ts">
-  import type { Snippet } from 'svelte'
-  import { connect, disconnect, getSnapshot } from '../state/adapter.svelte'
-  import { theme, type ThemeChoice } from '../state/theme.svelte'
+  import { getSnapshot } from '../state/adapter.svelte'
+  import { layout } from '../state/layout.svelte'
+  import { siteText } from '../status/statusModel'
+  import ConnectionPill from './ConnectionPill.svelte'
+  import ThemeToggle from './ThemeToggle.svelte'
 
-  const THEME_OPTIONS: readonly { id: ThemeChoice; label: string }[] = [
-    { id: 'system', label: 'System' },
-    { id: 'light', label: 'Light' },
-    { id: 'dark', label: 'Dark' },
-  ]
-
+  // Desktop: brand, site, connection, Focus, Connect or Disconnect, theme, menu.
+  // Phone (under 640 px): brand, connection, a Connect icon and the menu. The theme
+  // toggle moves into the menu there. The shell decides what Connect does, because it
+  // owns the held-hold check and the port error.
   let {
     focus,
     onFocusChange,
-    pill,
+    hasWebSerial,
+    portError,
+    menuOpen,
+    onConnectionToggle,
+    onMenuToggle,
   }: {
     focus: FocusMode
     onFocusChange: (mode: FocusMode) => void
-    /** Connection pill slot. The ConnectionPill component fills it in a later step. */
-    pill?: Snippet
+    hasWebSerial: boolean
+    portError: boolean
+    menuOpen: boolean
+    onConnectionToggle: () => void
+    onMenuToggle: () => void
   } = $props()
 
   const snapshot = $derived(getSnapshot())
   const connected = $derived(snapshot.connected)
-  const siteLabel = $derived(snapshot.siteId || 'AWAITING C-CH')
-
-  function toggleConnection(): void {
-    if (connected) void disconnect()
-    else void connect()
-  }
+  const siteLabel = $derived(siteText(snapshot.siteId))
+  const connectLabel = $derived(connected ? 'Disconnect' : 'Connect')
+  const connectTitle = $derived(hasWebSerial ? undefined : 'Use Chrome or Edge on desktop.')
 </script>
 
 <header class="top">
   <h1 class="brand">BearSentinel</h1>
-  <p class="site">
-    <span class="site-label">Site</span>
-    <span class="site-id">{siteLabel}</span>
-  </p>
+
+  {#if !layout.phone}
+    <p class="site">
+      <span class="site-label">Site</span>
+      <span class="site-id">{siteLabel}</span>
+    </p>
+  {/if}
+
   <div class="pill-slot">
-    {#if pill}{@render pill()}{/if}
+    <ConnectionPill {hasWebSerial} {portError} />
   </div>
 
   <div class="actions">
-    <div class="focus" role="group" aria-label="Focus">
-      <span class="group-label">Focus</span>
-      {#each FOCUS_MODES as mode (mode.id)}
-        <button
-          type="button"
-          class="seg-btn"
-          aria-pressed={focus === mode.id ? 'true' : 'false'}
-          onclick={() => onFocusChange(mode.id)}
-        >{mode.label}</button>
-      {/each}
-    </div>
+    {#if layout.desktop}
+      <div class="focus" role="group" aria-label="Focus">
+        <span class="group-label">Focus</span>
+        {#each FOCUS_MODES as mode (mode.id)}
+          <button
+            type="button"
+            class="seg-btn"
+            aria-pressed={focus === mode.id ? 'true' : 'false'}
+            onclick={() => onFocusChange(mode.id)}
+          >{mode.label}</button>
+        {/each}
+      </div>
+    {/if}
 
-    <button type="button" class="btn" onclick={toggleConnection}>
-      {connected ? 'Disconnect' : 'Connect'}
+    <button
+      type="button"
+      class="btn"
+      class:is-icon={layout.phone}
+      aria-label={connectLabel}
+      title={connectTitle}
+      disabled={!hasWebSerial}
+      onclick={onConnectionToggle}
+    >
+      {#if layout.phone}
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M5.5 1.5 V4.5 M10.5 1.5 V4.5 M3.5 4.5 H12.5 V7.5 A4.5 4.5 0 0 1 8 12 A4.5 4.5 0 0 1 3.5 7.5 Z M8 12 V14.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round" />
+        </svg>
+      {:else}
+        {connectLabel}
+      {/if}
     </button>
 
-    <div class="theme" role="group" aria-label="Theme">
-      {#each THEME_OPTIONS as option (option.id)}
-        <button
-          type="button"
-          class="seg-btn"
-          aria-pressed={theme.choice === option.id ? 'true' : 'false'}
-          onclick={() => theme.set(option.id)}
-        >{option.label}</button>
-      {/each}
-    </div>
+    {#if !layout.phone}
+      <ThemeToggle />
+    {/if}
 
-    <button type="button" class="icon-btn" aria-label="Menu">
+    <button
+      type="button"
+      class="icon-btn"
+      aria-label="Menu"
+      aria-expanded={menuOpen ? 'true' : 'false'}
+      data-menu-trigger
+      onclick={onMenuToggle}
+    >
       <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
         <path d="M2 4 H14 M2 8 H14 M2 12 H14" stroke="currentColor" stroke-width="1.5" fill="none" />
       </svg>
@@ -139,7 +163,9 @@
   .pill-slot {
     display: flex;
     align-items: center;
+    flex: 0 1 auto;
     min-width: 0;
+    overflow: hidden;
   }
 
   .actions {
@@ -151,14 +177,9 @@
   }
 
   .focus {
-    display: none;
-    align-items: center;
-    gap: var(--s-3);
-  }
-
-  .theme {
     display: inline-flex;
     align-items: center;
+    gap: var(--s-3);
   }
 
   .seg-btn {
@@ -214,6 +235,13 @@
     padding: 0 var(--s-3);
   }
 
+  .btn:disabled {
+    color: var(--tx-3);
+    border-style: dashed;
+    cursor: not-allowed;
+  }
+
+  .btn.is-icon,
   .icon-btn {
     display: inline-flex;
     align-items: center;
@@ -223,37 +251,28 @@
     flex: none;
   }
 
+  .btn svg,
   .icon-btn svg {
     width: 16px;
     height: 16px;
   }
 
-  .btn:hover,
+  .btn:hover:not(:disabled),
   .icon-btn:hover {
     background: var(--bg-2);
   }
 
-  /* Desktop only: the Focus control changes column weights and needs the full width. */
-  @media (min-width: 1280px) {
-    .focus {
-      display: inline-flex;
-    }
-  }
-
-  /* Phone: the site ID leaves the bar and the bar tightens to fit. The theme group
-     stays here until the phone menu takes it over. */
+  /* Phone: 44 px touch targets, and the bar tightens to fit. */
   @media (max-width: 639px) {
-    .site {
-      display: none;
-    }
-
     .top {
       gap: var(--s-3);
-      padding: 0 var(--s-3);
+      padding: 0 var(--s-4);
     }
 
-    .seg-btn {
-      padding: 0 var(--s-2);
+    .btn.is-icon,
+    .icon-btn {
+      width: var(--hit-touch);
+      height: var(--hit-touch);
     }
   }
 </style>

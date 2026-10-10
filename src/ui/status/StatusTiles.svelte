@@ -9,11 +9,10 @@
     formatDelta,
     grantDelta,
     hasDeltaCoverage,
-    siteText,
   } from './statusModel'
 
-  // Counters for the strip. Each label names its true scope. The largest figure is
-  // a 20 px mono counter; there is no hero number.
+  // Counters for the strip, or for the phone menu. Each label names its true scope. The
+  // largest figure is a 20 px mono counter; there is no hero number. The site lives in the top bar.
   let { newCount = 0 }: { newCount?: number } = $props()
 
   const snapshot = $derived(getSnapshot())
@@ -21,7 +20,6 @@
   const coverageStart = $derived(bufferCoverageStart(snapshot.grants, snapshot.stats.sessionStart))
   const delta = $derived(hasDeltaCoverage(now, coverageStart) ? grantDelta(snapshot.grants, now) : null)
   const session = $derived(formatAge(elapsedMs(now, snapshot.stats.sessionStart)))
-  const site = $derived(siteText(snapshot.siteId))
 </script>
 
 <dl class="tiles">
@@ -58,10 +56,6 @@
     <dd><span class="time">{session}</span></dd>
   </div>
 
-  <div class="tile">
-    <dt>Site</dt>
-    <dd><span class="site">{site}</span></dd>
-  </div>
 </dl>
 
 <style>
@@ -117,10 +111,5 @@
     font-size: var(--fs-title);
     line-height: var(--lh-title);
     font-weight: var(--fw-medium);
-  }
-
-  .site {
-    font-size: var(--fs-data);
-    line-height: var(--lh-data);
   }
 </style>

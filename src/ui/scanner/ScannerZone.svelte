@@ -10,7 +10,12 @@
 
   // The state line is driven by the hold controller, which takes HELD only from a scanner
   // line for the requested TG. lcdState is shown verbatim as secondary text and never
-  // decides the state, because the store writes it on click.
+  // decides the state, because the store writes it on click. The shell passes onHold so a
+  // Confirm on a stale hold can open the confirm sheet on touch and phone.
+  let {
+    onHold = (tgid: string) => holdController.hold(tgid),
+  }: { onHold?: (tgid: string) => void } = $props()
+
   const snapshot = $derived(getSnapshot())
   const hold = $derived($holdController)
   const phase = $derived(hold.phase)
@@ -93,7 +98,7 @@
 
     <div class="actions">
       {#if phase.kind === 'STALE'}
-        <button type="button" class="btn" disabled={!hold.connected} onclick={() => holdController.hold(phase.tgid)}>
+        <button type="button" class="btn" disabled={!hold.connected} onclick={() => onHold(phase.tgid)}>
           Confirm
         </button>
       {/if}

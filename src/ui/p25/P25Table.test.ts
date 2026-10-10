@@ -52,8 +52,9 @@ afterEach(() => {
 function renderTable(
   onHold = vi.fn(),
   agencyOn: Record<P25AgencyKey, boolean> = allAgenciesOn(),
+  onRelease = vi.fn(),
 ): (tgid: string) => void {
-  const instance = mount(P25Table, { target: host, props: { onHold, agencyOn } })
+  const instance = mount(P25Table, { target: host, props: { onHold, onRelease, agencyOn } })
   cleanups.push(() => unmount(instance))
   flushSync()
   return onHold
@@ -117,6 +118,24 @@ describe('P25Table rows', () => {
     const onHold = renderTable()
     button('button.hold').click()
     expect(onHold).toHaveBeenCalledWith('900')
+  })
+
+  it('routes Release through onRelease for the held row, never onHold', () => {
+    setSnapshot(
+      snapshot({
+        p25Cards: [row('500', NOW - 1000), row('501', NOW - 5000)],
+        p25HoldingTG: '501',
+        persistentP25: { '500': 3, '501': 2 },
+      }),
+    )
+    const onHold = vi.fn()
+    const onRelease = vi.fn()
+    const instance = mount(P25Table, { target: host, props: { onHold, onRelease, agencyOn: allAgenciesOn() } })
+    cleanups.push(() => unmount(instance))
+    flushSync()
+    button('li.row.is-held button.hold').click()
+    expect(onRelease).toHaveBeenCalledWith('501')
+    expect(onHold).not.toHaveBeenCalled()
   })
 
   it('disables Hold with the reason as text while disconnected', () => {
@@ -234,7 +253,7 @@ describe('P25Column', () => {
       }),
     )
     const onHold = vi.fn()
-    const instance = mount(P25Column, { target: host, props: { onHold } })
+    const instance = mount(P25Column, { target: host, props: { onHold, onRelease: vi.fn() } })
     cleanups.push(() => unmount(instance))
     flushSync()
     expect(rowTgs()).toEqual(['801', '12301'])

@@ -17,7 +17,8 @@
   // A value that is not in the list in use shows the first tab that is.
   const active = $derived<SitesTab>(tabs.includes(value) ? value : (tabs[0] ?? 'talkgroups'))
 
-  let buttons: (HTMLButtonElement | undefined)[] = []
+  // Reactive, so the bind:this into this array is tracked by Svelte.
+  let buttons = $state<(HTMLButtonElement | undefined)[]>([])
 
   function select(next: SitesTab): void {
     value = next

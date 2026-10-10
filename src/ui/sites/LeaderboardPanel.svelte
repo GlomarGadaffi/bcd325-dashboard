@@ -3,7 +3,17 @@
   import AgencyTag from '../primitives/AgencyTag.svelte'
   import Tooltip from '../primitives/Tooltip.svelte'
   import { clock } from '../state/clock.svelte'
-  import { LeaderboardOrder, axisMax, bareId, leaderboardTip, nestedBar, type LeaderboardKind } from './sitesModel'
+  import {
+    LEADERBOARD_ROWS,
+    LeaderboardOrder,
+    axisMax,
+    bareId,
+    leaderboardKind,
+    leaderboardTip,
+    nestedBar,
+    storeOrder,
+    type LeaderboardKind,
+  } from './sitesModel'
 
   // One leaderboard panel. Each instance has its own axis and its own reorder freeze.
   // The bar is a nested pair from zero: solid h5, remainder to h60. The table cells are the twin.
@@ -20,10 +30,14 @@
   }: { kind: LeaderboardKind; rows: LeaderboardEntry[]; compact?: boolean } = $props()
 
   const text = $derived(TEXT[kind])
-  const axis = $derived(axisMax(rows))
+  // Only this panel's kind, in store order, capped at LEADERBOARD_ROWS. The core keeps every ID.
+  const shown = $derived(
+    storeOrder(rows.filter((row) => leaderboardKind(row.id) === kind)).slice(0, LEADERBOARD_ROWS),
+  )
+  const axis = $derived(axisMax(shown))
   // Holds the frozen order between derivations. The clock drives the 5-second check.
   const order = new LeaderboardOrder()
-  const ordered = $derived(order.next(rows, clock.now))
+  const ordered = $derived(order.next(shown, clock.now))
 
   const titleId = $derived(`lb-${kind}-title`)
 
@@ -38,7 +52,7 @@
     <span class="metric">{text.metric}</span>
   </header>
 
-  {#if rows.length === 0}
+  {#if shown.length === 0}
     <p class="empty">{text.empty}</p>
   {:else}
     <div role="table" class="grid" aria-labelledby={titleId}>
