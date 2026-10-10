@@ -1,10 +1,15 @@
 import { ScannerDecoder } from './Decoder';
 import type { EDACSEvent, P25Event } from '../types';
 
-type AnyEventCallback = (e: any) => void;
+interface SerialPortLike {
+    readable: ReadableStream<BufferSource> | null;
+    writable: WritableStream<Uint8Array> | null;
+    open(options: { baudRate: number }): Promise<void>;
+    close(): Promise<void>;
+}
 
 export class SerialMonitor {
-    port: any | null = null;
+    port: SerialPortLike | null = null;
     reader: ReadableStreamDefaultReader<string> | null = null;
     writer: WritableStreamDefaultWriter<string> | null = null;
     connected = false;
@@ -15,8 +20,8 @@ export class SerialMonitor {
     private inFlight: string | null = null;
     private busyTimer: number | null = null;
 
-    private edacsListeners: AnyEventCallback[] = [];
-    private p25Listeners: AnyEventCallback[] = [];
+    private edacsListeners: ((e: EDACSEvent) => void)[] = [];
+    private p25Listeners: ((e: P25Event) => void)[] = [];
     private rawListeners: ((line: string) => void)[] = [];
     private statusListeners: ((connected: boolean) => void)[] = [];
 
@@ -44,7 +49,7 @@ export class SerialMonitor {
         this.cmdQueue = [];
         this.releaseBusy();
         try {
-            this.port = await (navigator as any).serial.requestPort();
+            this.port = await (navigator as Navigator & { serial: { requestPort(): Promise<SerialPortLike> } }).serial.requestPort();
             await this.port.open({ baudRate: 115200 });
             
             const textEncoder = new TextEncoderStream();
@@ -72,7 +77,8 @@ export class SerialMonitor {
             if (this.reader) await this.reader.cancel();
             if (this.writer) { this.writer.releaseLock(); this.writer = null; }
             if (this.port) { await this.port.close(); this.port = null; }
-        } catch(e) { 
+        } catch {
+            // Port may already be closed or unplugged; state is reset regardless
         }
     }
 
@@ -151,7 +157,7 @@ export class SerialMonitor {
             this.busyTimer = window.setTimeout(() => this.releaseBusy(), 1000);
             try {
                 await this.writer.write(cmd + "\r");
-            } catch(e) {
+            } catch {
                 this.releaseBusy();
             }
         }

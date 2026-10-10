@@ -4,8 +4,7 @@ import { Radio } from 'lucide-react';
 import './PatchMatrix.css';
 
 export default function PatchMatrix() {
-    const { patches, siteId, persistentPatches } = useSentinelState();
-    const now = Date.now();
+    const { patches, siteId, persistentPatches, clock: now } = useSentinelState();
 
     const formatAge = (diffMs: number) => {
         if (diffMs < 60000) return `${Math.floor(diffMs/1000)}s ago`;
