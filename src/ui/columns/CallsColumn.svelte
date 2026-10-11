@@ -50,6 +50,7 @@
 
   let windowId = $state<WindowId>(readWindow())
   let paused = $state(false)
+  let filtersOpen = $state(false)
   let agencyOn = $state<Record<AgencyKey, boolean>>(allOn(AGENCY_KEYS))
   let typeOn = $state<Record<GrantTypeKey, boolean>>(allOn(TYPE_KEYS))
 
@@ -71,6 +72,9 @@
   // The chart shows the whole window. Filters hide feed rows only.
   const inWin = $derived(filterWindow(views, windowId, clock.now))
   const visible = $derived(inWin.filter((view) => passesFilters(view, agencyOn, typeOn)))
+  const filtersOff = $derived(
+    AGENCY_KEYS.filter((key) => !agencyOn[key]).length + TYPE_KEYS.filter((key) => !typeOn[key]).length,
+  )
   const hiddenCount = $derived(inWin.length - visible.length)
   const model = $derived(buildHistogram(inWin, phone ? PHONE_MAX_BUCKETS : Infinity))
   const histogram = $derived(usesHistogram(model))
@@ -122,19 +126,28 @@
         >{WINDOW_LABELS[id]}</button>
       {/each}
     </div>
+    <button
+      type="button"
+      class="ctl filters-toggle"
+      aria-expanded={filtersOpen ? 'true' : 'false'}
+      aria-controls="calls-filters"
+      onclick={() => (filtersOpen = !filtersOpen)}
+    >Filters{filtersOff > 0 ? ` (${filtersOff} off)` : ''}</button>
     {#if hiddenCount > 0}
       <p class="hidden">{hiddenCount} hidden by filters</p>
     {/if}
   </div>
 
-  <div class="filters" role="group" aria-label="Filters">
-    {#each AGENCY_KEYS as key (key)}
-      <FilterChip pressed={agencyOn[key]} onToggle={() => toggleAgency(key)}>{key}</FilterChip>
-    {/each}
-    {#each TYPE_KEYS as key (key)}
-      <FilterChip pressed={typeOn[key]} onToggle={() => toggleType(key)}>{key}</FilterChip>
-    {/each}
-  </div>
+  {#if filtersOpen}
+    <div id="calls-filters" class="filters" role="group" aria-label="Filters">
+      {#each AGENCY_KEYS as key (key)}
+        <FilterChip pressed={agencyOn[key]} onToggle={() => toggleAgency(key)}>{key}</FilterChip>
+      {/each}
+      {#each TYPE_KEYS as key (key)}
+        <FilterChip pressed={typeOn[key]} onToggle={() => toggleType(key)}>{key}</FilterChip>
+      {/each}
+    </div>
+  {/if}
 
   {#if histogram}
     <GrantHistogram {model} />
@@ -214,6 +227,11 @@
 
   .seg + .seg {
     border-left: 1px solid var(--line-2);
+  }
+
+  .filters-toggle {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-control);
   }
 
   .pause {
