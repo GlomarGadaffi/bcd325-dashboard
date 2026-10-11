@@ -15,6 +15,7 @@
   import CallsColumn from './columns/CallsColumn.svelte'
   import P25Column from './columns/P25Column.svelte'
   import SitesColumn from './columns/SitesColumn.svelte'
+  import TopTalkgroups from './sites/TopTalkgroups.svelte'
   import MenuPopover from './overlays/MenuPopover.svelte'
   import RawLogSheet from './overlays/RawLogSheet.svelte'
   import WipeDialog from './overlays/WipeDialog.svelte'
@@ -31,6 +32,8 @@
     { id: 'p25', label: 'P25' },
     { id: 'sites', label: 'Sites' },
   ]
+  // Under 400 px Sites folds into the top of Calls, which leaves two tabs.
+  const NARROW_TABS: readonly { id: Tab; label: string }[] = TABS.filter((item) => item.id !== 'sites')
   // Phone drops Channels from the Sites tabs; it opens from the menu as a sheet instead.
   const PHONE_SITE_TABS: readonly SitesTab[] = ['talkgroups', 'units', 'members']
   // Under 400 px the Units tab goes too.
@@ -77,6 +80,9 @@
   const snap = $derived(getSnapshot())
   const hold = $derived($holdController)
   const newCount = $derived(countNew(snap.p25Cards, snap.persistentP25, clock.now))
+  const tabs = $derived(layout.narrow ? NARROW_TABS : TABS)
+  // A phone resized across 400 px while on Sites lands on Calls, not on a hidden region.
+  const activeTab = $derived(layout.narrow && tab === 'sites' ? 'calls' : tab)
   const siteTabs = $derived(layout.narrow ? NARROW_SITE_TABS : layout.phone ? PHONE_SITE_TABS : SITES_TABS)
   // The banner shows when disconnected with data seen before, or when Web Serial is missing.
   // A port error always shows, since it answers the operator's own Connect.
@@ -178,23 +184,24 @@
   </StatusStrip>
 
   <main class="body" data-focus={focus}>
-    <div class="region region-calls" class:is-active={tab === 'calls'}>
-      <CallsColumn />
+    <div class="region region-calls" class:is-active={activeTab === 'calls'}>
+      {#if layout.narrow}<TopTalkgroups />{/if}
+      <div class="calls-fill"><CallsColumn /></div>
     </div>
-    <div class="region region-p25" class:is-active={tab === 'p25'}>
+    <div class="region region-p25" class:is-active={activeTab === 'p25'}>
       <P25Column onHold={requestHold} onRelease={releaseHold} />
     </div>
-    <div class="region region-sites" class:is-active={tab === 'sites'}>
+    <div class="region region-sites" class:is-active={activeTab === 'sites'}>
       <SitesColumn compact={layout.phone} tabs={siteTabs} bind:tab={sitesTab} />
     </div>
   </main>
 
   <nav class="tabbar" aria-label="Sections">
-    {#each TABS as item (item.id)}
+    {#each tabs as item (item.id)}
       <button
         type="button"
         class="tab"
-        aria-pressed={tab === item.id ? 'true' : 'false'}
+        aria-pressed={activeTab === item.id ? 'true' : 'false'}
         onclick={() => (tab = item.id)}
       >{item.label}</button>
     {/each}
@@ -279,9 +286,22 @@
     height: 100%;
   }
 
+  /* Under 400 px the top-talkgroups strip sits above the calls column in the same region. */
+  @media (max-width: 399px) {
+    .region-calls.is-active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .calls-fill {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+  }
+
   .tabbar {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     background: var(--bg-1);
     border-top: 1px solid var(--line-1);
   }
