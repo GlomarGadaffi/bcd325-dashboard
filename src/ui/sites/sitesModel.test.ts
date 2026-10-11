@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GrantEvent, LeaderboardEntry } from '../../types'
 import {
+  topTalkgroups,
   NO_EDACS_DATA_TEXT,
   NO_PATCHES_TEXT,
   PATCH_VISIBLE_MS,
@@ -318,6 +319,24 @@ describe('formatAge', () => {
 
   it('reads a negative age as zero', () => {
     expect(formatAge(-500)).toBe('0 s')
+  })
+})
+
+describe('topTalkgroups', () => {
+  const row = (id: string, h5: number, h60: number): LeaderboardEntry => ({ id, name: id, agency: 'UNK', h5, h60 })
+
+  it('takes the three busiest talkgroups of the last five minutes', () => {
+    const rows = [row('1', 2, 9), row('2', 7, 7), row('3', 5, 8), row('4', 4, 4), row('5', 6, 20)]
+    expect(topTalkgroups(rows).map((r) => r.id)).toEqual(['2', '5', '3'])
+  })
+
+  it('breaks ties on the hour count', () => {
+    expect(topTalkgroups([row('1', 3, 4), row('2', 3, 9)]).map((r) => r.id)).toEqual(['2', '1'])
+  })
+
+  it('leaves out units, members and talkgroups with no recent grants', () => {
+    const rows = [row('U:10', 9, 9), row('M:20', 8, 8), row('30', 0, 12), row('40', 1, 1)]
+    expect(topTalkgroups(rows).map((r) => r.id)).toEqual(['40'])
   })
 })
 

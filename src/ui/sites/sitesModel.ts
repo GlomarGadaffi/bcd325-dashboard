@@ -267,6 +267,17 @@ export function formatAge(ageMs: number): string {
 /** Rows a leaderboard panel shows, for its own kind only. The store keeps every ID it has seen. */
 export const LEADERBOARD_ROWS = 20
 
+/** How many talkgroups the narrow-phone strip above the calls feed shows. */
+export const TOP_STRIP_ROWS = 3
+
+/** The talkgroups with the most grants in the last five minutes, for the narrow-phone strip. */
+export function topTalkgroups(rows: readonly LeaderboardEntry[], limit = TOP_STRIP_ROWS): LeaderboardEntry[] {
+  return splitLeaderboard(rows)
+    .talkgroups.filter((row) => row.h5 > 0)
+    .sort((a, b) => b.h5 - a.h5 || b.h60 - a.h60)
+    .slice(0, limit)
+}
+
 export const SITES_TABS = ['talkgroups', 'units', 'members', 'channels'] as const
 export type SitesTab = (typeof SITES_TABS)[number]
 
