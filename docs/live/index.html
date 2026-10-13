@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Live Web Serial Console: bcd325-dashboard</title>
+<meta name="description" content="Connect directly to your Uniden BCD325P2 or BCD996P2 scanner over Web Serial (USB) to monitor real-time RF network telemetry.">
+<style>
+/* Switchboard design system for live serial console */
+:root {
+  --bg: #fefefe;
+  --surface: #f4f4f4;
+  --surface-raised: #f0f0f0;
+  --text: #454545;
+  --text-dim: #777777;
+  --border: #dddddd;
+  --border-strong: #cccccc;
+  --accent: #0077aa;
+  --accent-hi: #0077aa;
+  --alert: #c0392b;
+  --ok: #1a7f37;
+  --warn: #b58900;
+  --ringing: #941352;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+  --sans: "Open Sans", Arial, sans-serif;
+  --radius: 3px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+html.inverted {
+  --bg: #000000;
+  --surface: #111111;
+  --surface-raised: #1a1a1a;
+  --text: #d9d9d9;
+  --text-dim: #999999;
+  --border: #333333;
+  --border-strong: #444444;
+  --accent: #00a2e7;
+  --accent-hi: #00a2e7;
+  --alert: #d24637;
+  --ok: #5fd377;
+  --warn: #e3b341;
+  --ringing: #ca1a70;
+}
+
+html.contrast {
+  --text: #050505;
+  --text-dim: #333333;
+  --accent: #0033ff;
+  --border: #bbbbbb;
+  --alert: #880000;
+}
+
+html.inverted.contrast {
+  --text: #ffffff;
+  --text-dim: #cccccc;
+  --accent: #44c7ff;
+  --border: #666666;
+  --alert: #db695d;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 var(--sans);
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 800px; margin: 0 auto; padding: 2em 1em 4em; }
+
+header { margin-bottom: 24px; }
+h1 {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: clamp(1.4rem, 3.5vw, 1.85rem);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text);
+  line-height: 1.2;
+  margin: 0 0 6px;
+}
+h1 .dot { font-style: normal; color: var(--text-dim); }
+h1 span {
+  display: inline-block;
+  font-size: .6em;
+  color: var(--text-dim);
+  font-weight: 400;
+  letter-spacing: .08em;
+  margin-left: 1em;
+  vertical-align: middle;
+}
+.sub { color: var(--text-dim); margin: 0; font-style: italic; }
+
+nav.fn {
+  font-family: var(--mono);
+  font-size: .8rem;
+  letter-spacing: .04em;
+  margin-bottom: 1.2em;
+  color: var(--text-dim);
+}
+nav.fn a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--border-strong); }
+nav.fn a:hover { color: var(--text); border-bottom-style: solid; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.card > :last-child { margin-bottom: 0; }
+
+h2 {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: .88rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.notice {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: .88rem;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.notice.err { background: rgba(192, 57, 43, 0.08); border-color: var(--alert); color: var(--alert); }
+.notice.warn { background: rgba(181, 137, 0, 0.08); border-color: var(--warn); }
+.hidden { display: none !important; }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+button {
+  font-family: var(--mono);
+  font-size: .82rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+  transition: all .15s ease;
+}
+button:hover { border-color: var(--text-dim); }
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+button.primary:hover { opacity: .9; }
+button.danger { border-color: var(--alert); color: var(--alert); }
+button.danger:hover { background: rgba(192, 57, 43, 0.1); }
+
+/* Telemetry Display Grid */
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.t-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  text-align: center;
+}
+.t-lbl {
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.t-val {
+  font-family: var(--mono);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent);
+  word-break: break-all;
+}
+.t-val.alert { color: var(--alert); }
+
+/* Terminal / Serial Log */
+pre.log-window {
+  font-family: var(--mono);
+  font-size: .78rem;
+  line-height: 1.45;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 8px 0;
+}
+
+/* Keypad Grid */
+.keypad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.keypad button {
+  padding: 6px 12px;
+  font-size: .75rem;
+}
+
+button.ci {
+  cursor: pointer;
+  position: fixed;
+  right: 10px;
+  font-family: var(--mono);
+  font-size: .7em;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 4px 8px;
+  z-index: 100;
+}
+button.ci:hover { border-color: var(--text-dim); }
+#contrast { top: 10px; }
+#invmode { top: 40px; }
+@media screen and (max-width:1080px) { button.ci { position: absolute; } }
+</style>
+</head>
+<body>
+<button class="ci" id="contrast" type="button">Contrast</button>
+<button class="ci" id="invmode" type="button">Invert</button>
+
+<div class="wrap">
+
+<header>
+  <nav class="fn"><a href="../index.html">&larr; Overview</a> &middot; <a href="../index.html#how">Architecture</a> &middot; <a href="../index.html#modes">Modes</a> &middot; <a href="../protocol.html">Protocol Spec</a> &middot; <a href="https://github.com/GlomarGadaffi/bcd325-dashboard">Source</a></nav>
+  <h1>bcd325<i class="dot">&middot;</i>live<span>web serial console</span></h1>
+  <p class="sub">Direct browser serial telemetry console for Uniden BCD325P2 &amp; BCD996P2 scanners.</p>
+</header>
+
+<!-- Browser gate -->
+<div id="unsupported" class="notice err hidden">
+  <p><strong>This browser does not support the Web Serial API.</strong></p>
+  <p>Web Serial is supported in desktop Google Chrome, Microsoft Edge, and Opera. Firefox, Safari, and mobile browsers are not currently supported.</p>
+</div>
+
+<!-- Connect Card -->
+<section class="card">
+  <h2>Scanner Connection (USB UART)</h2>
+  <div class="row">
+    <button id="btn-connect" class="primary">Connect Scanner</button>
+    <button id="btn-disconnect" class="danger hidden">Disconnect</button>
+    <span id="conn-state" style="font-family:var(--mono);font-size:.82rem;color:var(--text-dim)">OFFLINE</span>
+  </div>
+</section>
+
+<!-- Live Telemetry Card -->
+<section class="card" id="telemetry-card">
+  <h2>Active Receiver Telemetry</h2>
+  <div class="telemetry-grid">
+    <div class="t-chip">
+      <div class="t-lbl">Tuned Frequency</div>
+      <div class="t-val" id="disp-freq">&mdash;&mdash;.&mdash;&mdash;&mdash;</div>
+    </div>
+    <div class="t-chip">
+      <div class="t-lbl">Talkgroup (TGID)</div>
+      <div class="t-val" id="disp-tgid">&mdash;&mdash;&mdash;&mdash;</div>
+    </div>
+    <div class="t-chip">
+      <div class="t-lbl">Unit ID (UID)</div>
+      <div class="t-val" id="disp-uid">&mdash;&mdash;&mdash;&mdash;</div>
+    </div>
+    <div class="t-chip">
+      <div class="t-lbl">Signal (RSSI)</div>
+      <div class="t-val" id="disp-rssi">0 / 5</div>
+    </div>
+  </div>
+
+  <div class="telemetry-grid">
+    <div class="t-chip" style="grid-column: span 2">
+      <div class="t-lbl">System / Agency Label</div>
+      <div class="t-val" id="disp-sys" style="font-size:1.05rem">NO SIGNAL</div>
+    </div>
+    <div class="t-chip" style="grid-column: span 2">
+      <div class="t-lbl">Channel / Group Label</div>
+      <div class="t-val" id="disp-chan" style="font-size:1.05rem">SCANNING</div>
+    </div>
+  </div>
+
+  <h2>Keypad Remote Emulation</h2>
+  <div class="keypad">
+    <button onclick="sendKey('H')">Hold</button>
+    <button onclick="sendKey('S')">Scan</button>
+    <button onclick="sendKey('A')">Avoid</button>
+    <button onclick="sendKey('F')">Function</button>
+    <button onclick="sendKey('M')">Menu</button>
+    <button onclick="sendCmd('VOL')">Vol ?</button>
+    <button onclick="sendCmd('SQL')">Sql ?</button>
+  </div>
+</section>
+
+<!-- Serial Log Card -->
+<section class="card">
+  <h2>Raw Serial Frames (STS / ASCII Stream)</h2>
+  <pre class="log-window" id="serial-log">Ready. Connect your Uniden scanner via USB to begin streaming telemetry.</pre>
+  <div class="row" style="margin-top:8px">
+    <button id="btn-copy-log">Copy Log</button>
+    <button id="btn-clear-log">Clear Log</button>
+  </div>
+</section>
+
+<footer>
+  <p><a href="https://github.com/GlomarGadaffi/bcd325-dashboard">bcd325-dashboard</a> &middot; Built on the Web Serial API &middot; Nothing leaves your browser.</p>
+</footer>
+
+</div>
+
+<script>
+// Check browser Web Serial support
+if (!("serial" in navigator)) {
+  document.getElementById("unsupported").classList.remove("hidden");
+  document.getElementById("btn-connect").disabled = true;
+}
+
+let port = null;
+let reader = null;
+let writer = null;
+let readLoopActive = false;
+let pollTimer = null;
+const logEl = document.getElementById("serial-log");
+
+function log(msg) {
+  const ts = new Date().toISOString().substring(11, 19);
+  logEl.textContent += `[${ts}] ${msg}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function connect() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    writer = port.writable.getWriter();
+    
+    document.getElementById("btn-connect").classList.add("hidden");
+    document.getElementById("btn-disconnect").classList.remove("hidden");
+    document.getElementById("conn-state").textContent = "CONNECTED (115200 BPS)";
+    document.getElementById("conn-state").style.color = "var(--ok)";
+    
+    log("Serial port opened at 115200 bps. Starting STS polling loop...");
+    startReading();
+    startPolling();
+  } catch (err) {
+    log("Connection failed: " + err.message);
+  }
+}
+
+async function disconnect() {
+  stopPolling();
+  readLoopActive = false;
+  if (reader) {
+    try { await reader.cancel(); } catch(e){}
+    reader = null;
+  }
+  if (writer) {
+    try { writer.releaseLock(); } catch(e){}
+    writer = null;
+  }
+  if (port) {
+    try { await port.close(); } catch(e){}
+    port = null;
+  }
+  document.getElementById("btn-connect").classList.remove("hidden");
+  document.getElementById("btn-disconnect").classList.add("hidden");
+  document.getElementById("conn-state").textContent = "OFFLINE";
+  document.getElementById("conn-state").style.color = "var(--text-dim)";
+  log("Serial port disconnected.");
+}
+
+async function sendCmd(cmd) {
+  if (!writer) return;
+  try {
+    const enc = new TextEncoder();
+    await writer.write(enc.encode(cmd + "\r"));
+  } catch(e) {
+    log("Write error: " + e.message);
+  }
+}
+
+function sendKey(key) {
+  sendCmd("KEY," + key + ",P");
+}
+
+function startPolling() {
+  // Query status every 100ms
+  pollTimer = setInterval(() => {
+    sendCmd("STS");
+  }, 100);
+}
+
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+async function startReading() {
+  readLoopActive = true;
+  let buffer = "";
+  const decoder = new TextDecoder();
+  
+  while (port && port.readable && readLoopActive) {
+    try {
+      reader = port.readable.getReader();
+      while (readLoopActive) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          buffer += decoder.decode(value);
+          const lines = buffer.split("\r");
+          buffer = lines.pop(); // keep remainder
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed) parsePacket(trimmed);
+          }
+        }
+      }
+    } catch (err) {
+      log("Read stream error: " + err.message);
+      break;
+    } finally {
+      if (reader) {
+        reader.releaseLock();
+        reader = null;
+      }
+    }
+  }
+}
+
+function parsePacket(line) {
+  // Check for STS status line
+  if (line.startsWith("STS,")) {
+    const parts = line.split(",");
+    // STS,[mode],[sql],[mute],[p_ch],[freq],[mod],[sys_name],[dept_name],[chan_name],[tgid],[uid],[rssi]...
+    if (parts.length >= 6) {
+      if (parts[5]) document.getElementById("disp-freq").textContent = parts[5] + " MHz";
+      if (parts[7]) document.getElementById("disp-sys").textContent = parts[7] || "P25 TRUNK";
+      if (parts[9]) document.getElementById("disp-chan").textContent = parts[9] || "DISPATCH";
+      if (parts[10]) document.getElementById("disp-tgid").textContent = parts[10];
+      if (parts[11]) document.getElementById("disp-uid").textContent = parts[11];
+      if (parts[12]) document.getElementById("disp-rssi").textContent = parts[12] + " / 5";
+    }
+  } else {
+    log("RX: " + line);
+  }
+}
+
+document.getElementById("btn-connect").addEventListener("click", connect);
+document.getElementById("btn-disconnect").addEventListener("click", disconnect);
+document.getElementById("btn-clear-log").addEventListener("click", () => {
+  logEl.textContent = "";
+});
+document.getElementById("btn-copy-log").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(logEl.textContent);
+    const b = document.getElementById("btn-copy-log");
+    b.textContent = "Copied!";
+    setTimeout(() => { b.textContent = "Copy Log"; }, 1500);
+  } catch(e) {}
+});
+
+// Theme persistence
+(function(){
+ var h=document.documentElement;
+ function load(k){try{return localStorage.getItem(k)==="1"}catch(e){return false}}
+ function save(k,v){try{localStorage.setItem(k,v?"1":"0")}catch(e){}}
+ [["contrast","pd-contrast"],["inverted","pd-inverted"]].forEach(function(p){if(load(p[1]))h.classList.add(p[0])});
+ document.getElementById("contrast").onclick=function(){save("pd-contrast",h.classList.toggle("contrast"))};
+ document.getElementById("invmode").onclick=function(){save("pd-inverted",h.classList.toggle("inverted"))};
+})();
+</script>
+</body>
+</html>

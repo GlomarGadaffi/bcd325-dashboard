@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>BCD325P2 Remote Serial Protocol Specification: BearSentinel</title>
+<meta name="description" content="Complete engineering reference for the Uniden BCD325P2 remote serial control protocol (ver 1.02). ASCII command format, polling specs, and register maps.">
+<style>
+/* Layout and type borrowed from the Switchboard design system; the palette stays plain. */
+:root{
+  --bg:#fefefe;--face:#f4f4f4;--face-raised:#f0f0f0;--ink:#454545;--ink-dim:#777;--brass:#07a;--brass-hi:#07a;--brass-lo:#999;--line:#ddd;--alert:#c0392b;--ringing:#941352;--ok:#1a7f37;--warn:#b58900;
+  --mono:ui-monospace,"SF Mono","Cascadia Code","Consolas","Liberation Mono",monospace;--sans:"Open Sans",Arial,sans-serif;
+}
+html.inverted{
+  --bg:#000;--face:#111;--face-raised:#000;--ink:#d9d9d9;--ink-dim:#999;--brass:#00a2e7;--brass-hi:#00a2e7;--brass-lo:#555;--line:#333;--alert:#d24637;--ringing:#ca1a70;--ok:#5fd377;--warn:#e3b341;
+}
+html.contrast{
+  --ink:#050505;--ink-dim:#333;--brass:#03f;--brass-hi:#03f;--line:#bbb;--alert:#800;
+}
+html.inverted.contrast{
+  --ink:#fff;--ink-dim:#ccc;--brass:#44c7ff;--brass-hi:#44c7ff;--line:#666;--alert:#db695d;
+}
+html{background:var(--bg)}
+body{
+  font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:15px;margin:2em auto;max-width:800px;padding:1em;line-height:1.55;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word;
+}
+a{color:var(--brass);text-underline-offset:.15em}a:visited{color:var(--ringing)}
+h1{
+  font-family:var(--mono);font-weight:700;font-size:1.8em;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);line-height:1.2;margin:0 0 .3em;
+}
+h1 .dot{font-style:normal;color:var(--ink-dim)}
+h1 span{color:var(--ink-dim);font-weight:400;font-size:.55em;letter-spacing:.2em;margin-left:.6em;vertical-align:middle}
+h2{
+  font-family:var(--mono);font-weight:600;font-size:.85em;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:2.4em 0 .8em;padding-bottom:.4em;border-bottom:1px solid var(--line);
+}
+h3{
+  font-family:var(--mono);font-size:.78rem;margin:1.4em 0 .4em;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-dim);
+}
+p.st{margin-top:0;color:var(--ink-dim);font-style:italic}
+b{color:var(--ink)}
+code,pre{font-family:var(--mono);font-size:.9em}
+pre{overflow-x:auto;padding:.7em .9em;background:var(--face);border:1px solid var(--line);border-left:3px solid #ccc;border-radius:2px}
+pre code{color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:.92em;margin:1em 0}
+th{font-family:var(--mono);font-weight:600;font-size:.75em;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+th,td{text-align:left;padding:.45em .8em .45em 0;border-bottom:1px solid var(--line);vertical-align:top}
+nav{font-family:var(--mono);font-size:.8em;letter-spacing:.04em;color:var(--ink-dim);margin-bottom:1.5em}
+footer{margin-top:3em;padding-top:1em;border-top:1px solid var(--line);font-size:.85em;color:var(--ink-dim)}
+button.ci{
+  cursor:pointer;position:fixed;right:10px;font-family:var(--mono);font-size:.7em;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--face-raised);border:1px solid var(--line);border-radius:2px;padding:4px 8px;z-index:100;
+}
+button.ci:hover{border-color:var(--ink-dim)}
+#contrast{top:10px}#invmode{top:40px}
+@media screen and (max-width:1080px){button.ci{position:absolute}}
+</style>
+</head>
+<body>
+<button class="ci" id="contrast" type="button">Contrast</button>
+<button class="ci" id="invmode" type="button">Invert</button>
+
+<nav><a href="index.html">&larr; Overview</a> &middot; <a href="live/">Web Serial Console</a> &middot; <a href="https://github.com/GlomarGadaffi/bcd325-dashboard">Source</a></nav>
+
+<h1>bcd325<i class="dot">&middot;</i>protocol<span>spec ver 1.02</span></h1>
+<p class="st">Serial control protocol reference, response schemas, and timing guidelines for the Uniden BCD325P2.</p>
+
+<h2>Physical &amp; Link Layer Format</h2>
+<p>The scanner exposes an internal USB UART bridge via its front Mini-USB connector:</p>
+<ul>
+<li><b>Baud Rate:</b> 115,200 bps default (configurable: 4800 / 9600 / 19200 / 38400 / 57600 / 115200)</li>
+<li><b>Data Framing:</b> 8 Data Bits, 1 Stop Bit, No Parity (8-N-1)</li>
+<li><b>Flow Control:</b> None (Software pacing required; do not exceed command buffer)</li>
+<li><b>Encoding:</b> Plain 7-bit / 8-bit ASCII</li>
+<li><b>Line Terminator:</b> Carriage Return only (<code>\r</code>, ASCII 0x0D). The scanner never expects or sends Line Feed (<code>\n</code>).</li>
+</ul>
+
+<h2>Transaction Contract &amp; Error Responses</h2>
+<p>The interface is strictly synchronous. <b>The host must wait for a response line before transmitting the subsequent command.</b> Overlapping commands trigger buffer collisions or frame dropouts.</p>
+
+<table>
+<thead><tr><th>Response Code</th><th>Meaning</th><th>Recovery Strategy</th></tr></thead>
+<tbody>
+<tr><td><code>OK\r</code></td><td>Command accepted and executed successfully.</td><td>Proceed to next command.</td></tr>
+<tr><td><code>ERR\r</code></td><td>Syntax / Argument value error.</td><td>Verify command parameters and value range.</td></tr>
+<tr><td><code>NG\r</code></td><td>Command is currently invalid in the scanner's active state.</td><td>e.g., Calling channel memory writes outside Program Mode (<code>PRG</code>).</td></tr>
+<tr><td><code>FER\r</code></td><td>Framing error detected on UART wire.</td><td>Check baud rate configuration; reconnect serial port.</td></tr>
+<tr><td><code>ORER\r</code></td><td>Overrun error on receiver FIFO buffer.</td><td>Increase host poll delay; do not exceed 20 QPS polling rate.</td></tr>
+</tbody>
+</table>
+
+<h2>Core Command Reference</h2>
+
+<h3>1. Device Identification &amp; Diagnostics</h3>
+<table>
+<thead><tr><th>Command</th><th>Request</th><th>Scanner Response</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>MDL</code></td><td><code>MDL\r</code></td><td><code>MDL,BCD325P2\r</code></td><td>Validates attached receiver model identity.</td></tr>
+<tr><td><code>VER</code></td><td><code>VER\r</code></td><td><code>VER,Version 1.06.00\r</code></td><td>Returns active firmware revision string.</td></tr>
+<tr><td><code>BAT</code></td><td><code>BAT\r</code></td><td><code>BAT,&lt;val&gt;\r</code></td><td>Returns internal battery ADC reading (mV).</td></tr>
+<tr><td><code>PWR</code></td><td><code>PWR\r</code></td><td><code>PWR,&lt;state&gt;\r</code></td><td><code>1</code> = USB Bus / External Power; <code>0</code> = Internal Battery.</td></tr>
+</tbody>
+</table>
+
+<h3>2. Telemetry Polling (The Real-Time Engine)</h3>
+<p>The engine continuously issues <code>STS</code> to query what the tuner and trunking decoder are receiving:</p>
+<pre><code>Controller &rarr; Radio:   STS\r
+Radio &rarr; Controller:   STS,0,0,1,0,851.0125,0,0,NFM,0,0,0,FHP TROOP C,DISPATCH,2048,4102,5\r</code></pre>
+
+<p><b>STS Response Schema:</b></p>
+<ol>
+<li><code>Mode</code>: 0 = Scan, 1 = Scan Hold, 2 = Search, 3 = Search Hold, 4 = Program Mode</li>
+<li><code>Squelch State</code>: 0 = Closed (Quiet), 1 = Open (Receiving Carrier)</li>
+<li><code>Mute State</code>: 0 = Audio Unmuted, 1 = Audio Muted</li>
+<li><code>Frequency</code>: Active tuned center frequency (MHz, e.g. <code>851.0125</code>)</li>
+<li><code>Modulation</code>: <code>AM</code>, <code>FM</code>, <code>NFM</code>, <code>WFM</code>, <code>FMB</code></li>
+<li><code>System Name</code>: Text label for active trunked system (up to 16 chars)</li>
+<li><code>Department / Group Name</code>: Text label for sub-group (up to 16 chars)</li>
+<li><code>Channel / Talkgroup Label</code>: Active talkgroup name (up to 16 chars)</li>
+<li><code>TGID</code>: Decimal Talkgroup Identifier (e.g. <code>2048</code>)</li>
+<li><code>UID</code>: Decimal Unit / Radio ID (e.g. <code>4102</code>)</li>
+<li><code>RSSI</code>: Received Signal Strength Indication (0 to 5 bars)</li>
+</ol>
+
+<h3>3. Receiver Control</h3>
+<table>
+<thead><tr><th>Command</th><th>Request</th><th>Scanner Response</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>VOL</code></td><td><code>VOL,&lt;0-15&gt;\r</code></td><td><code>VOL,OK\r</code></td><td>Set audio volume level (0 to 15). Omitting param queries current volume.</td></tr>
+<tr><td><code>SQL</code></td><td><code>SQL,&lt;0-15&gt;\r</code></td><td><code>SQL,OK\r</code></td><td>Set RF squelch threshold (0 to 15). Omitting param queries current squelch.</td></tr>
+<tr><td><code>HLD</code></td><td><code>HLD\r</code></td><td><code>HLD,OK\r</code></td><td>Forces receiver to hold on current channel or talkgroup.</td></tr>
+<tr><td><code>SCN</code></td><td><code>SCN\r</code></td><td><code>SCN,OK\r</code></td><td>Resumes scanning across active system lists.</td></tr>
+<tr><td><code>QSY</code></td><td><code>QSY,&lt;freq&gt;\r</code></td><td><code>QSY,OK\r</code></td><td>Quick-tunes tuner directly to specified frequency (e.g. <code>QSY,155.4750\r</code>).</td></tr>
+</tbody>
+</table>
+
+<h3>4. Keypad Emulation (<code>KEY</code>)</h3>
+<p>Emulate physical keypad buttons remotely to navigate menus or trigger functions:</p>
+<pre><code>KEY,&lt;code&gt;[,&lt;mode&gt;]\r
+Mode: P = Press (Default), L = Long Press, H = Hold, R = Release</code></pre>
+<table>
+<thead><tr><th>Code</th><th>Button</th><th>Code</th><th>Button</th><th>Code</th><th>Button</th></tr></thead>
+<tbody>
+<tr><td><code>0</code>&ndash;<code>9</code></td><td>Number Keys 0&ndash;9</td><td><code>.</code></td><td>Decimal / No</td><td><code>E</code></td><td>Enter / Yes</td></tr>
+<tr><td><code>M</code></td><td>Menu</td><td><code>F</code></td><td>Function</td><td><code>H</code></td><td>Hold</td></tr>
+<tr><td><code>S</code></td><td>Scan / Search</td><td><code>L</code></td><td>L/O (Lockout)</td><td><code>A</code></td><td>Avoid</td></tr>
+</tbody>
+</table>
+
+<h2>Recommended Polling Architecture</h2>
+<p>For lowest latency with zero FIFO overruns:</p>
+<ul>
+<li>Issue <code>STS</code> once every <b>60 milliseconds (~16.6 Hz)</b>.</li>
+<li>Maintain an exponential backoff if <code>FER</code> or <code>ORER</code> is received.</li>
+<li>Issue <code>GLG</code> once every <b>5,000 milliseconds</b> if mobile GPS tracking is active.</li>
+<li>Close the serial port cleanly before rebooting or detaching hardware.</li>
+</ul>
+
+<footer>
+<p>bcd325-dashboard protocol documentation. Extracted from Uniden Remote Control Protocol Specification version 1.02. Licensed under MIT.</p>
+</footer>
+
+<script>
+(function(){
+ var h=document.documentElement;
+ function load(k){try{return localStorage.getItem(k)==="1"}catch(e){return false}}
+ function save(k,v){try{localStorage.setItem(k,v?"1":"0")}catch(e){}}
+ [["contrast","pd-contrast"],["inverted","pd-inverted"]].forEach(function(p){if(load(p[1]))h.classList.add(p[0])});
+ document.getElementById("contrast").onclick=function(){save("pd-contrast",h.classList.toggle("contrast"))};
+ document.getElementById("invmode").onclick=function(){save("pd-inverted",h.classList.toggle("inverted"))};
+})();
+</script>
+</body>
+</html>

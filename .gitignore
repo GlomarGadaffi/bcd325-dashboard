@@ -25,7 +25,6 @@ dist-ssr
 *.sw?
 
 # local docs — read the code
-docs/
 notes/
 *.txt
 LINEAGE.md
